@@ -626,3 +626,69 @@ feat: 新增"我的任务"模块 - 统一任务管理中心
 - ✅ 项目基本信息编辑功能完成（日期、描述）
 - ✅ 规划文档编写完成
 - ✅ Lint检查通过
+
+---
+
+## Task ID: 11 - Bug修复：项目基本信息编辑保存失败
+
+**日期**: 2025-02-28
+
+**背景**: 用户反馈项目基本信息编辑后无法保存
+
+### 问题分析
+
+#### 问题1：错误的npm包导入
+- `ProjectDetail.tsx` 和 `ProjectList.tsx` 中错误导入了 `date-fiber`
+- 正确的包名应该是 `date-fns`
+- 该错误导致组件加载时JavaScript运行时错误
+
+#### 问题2：后端API字段处理不当
+- `PUT /api/projects/[id]` 在更新时，前端只发送部分字段
+- 后端尝试更新所有字段，包括未提供的 `name` 和 `status`
+- 当这些字段为 `undefined` 时可能导致问题
+
+### Work Log:
+
+#### 1. 修复npm包导入错误
+```typescript
+// 修复前（错误）
+import { format } from 'date-fiber'
+
+// 修复后（正确）- 但发现未使用，已移除
+// import { format } from 'date-fns'
+```
+
+#### 2. 修复后端API字段处理
+```typescript
+// 修复前
+data: {
+  name,  // undefined 会被传入
+  status,
+  ...
+}
+
+// 修复后 - 使用展开运算符只更新提供的字段
+data: {
+  ...(name !== undefined && { name }),
+  ...(description !== undefined && { description }),
+  ...(status !== undefined && { status }),
+  ...
+}
+```
+
+#### 3. 清理未使用的导入
+- 移除 `ProjectList.tsx` 中未使用的 `format` 导入
+- 移除 `ProjectDetail.tsx` 中未使用的 `format` 导入
+
+### 文件变更:
+| 文件 | 变更类型 |
+|------|---------|
+| src/components/projects/ProjectDetail.tsx | 修复导入错误 |
+| src/components/projects/ProjectList.tsx | 修复导入错误 |
+| src/app/api/projects/[id]/route.ts | 修复字段更新逻辑 |
+
+### Stage Summary:
+- ✅ 导入错误已修复
+- ✅ 后端API字段处理已优化
+- ✅ Lint检查通过
+- ⚠️ 预览界面显示问题已恢复
