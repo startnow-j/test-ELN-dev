@@ -748,3 +748,281 @@ data: {
 - ✅ Prisma 客户端缓存问题已解决
 - ✅ Lint 检查通过
 - ✅ 功能测试通过
+
+---
+
+## Task ID: 13 - 界面导航功能优化
+
+**日期**: 2025-03-28
+
+**背景**: 用户提出导航功能改进需求 - 当在子页面（实验记录详情或项目详情页）时，可以直接从左侧边栏点击进入其他模块，无需先退出当前页面
+
+### Work Log:
+
+#### 功能改进
+- **问题**: 用户在实验详情页或项目详情页时，点击侧边栏其他模块无法跳转，必须先返回列表页
+- **解决方案**: 修改导航逻辑，侧边栏点击直接切换模块，当前详情页自动关闭
+
+#### 文档更新
+- 更新 `docs/SYSTEM_FEATURES_v3.3.md`
+  - 版本状态更新：v3.3 从"规划中"改为"开发中"
+  - 新增已完成功能：界面导航 - 全局导航改进（子页面可直接切换模块）
+  - 更新记录新增 v2.1 条目
+
+### Stage Summary:
+- ✅ 导航功能改进已实现
+- ✅ 系统特性文档已更新
+- ✅ v3.3 版本开发进行中
+
+---
+
+## Task ID: 14 - AI评分系统调整
+
+**日期**: 2025-03-28
+
+**背景**: 用户提出AI评分系统调整需求，包括评分标准修改、UI简化、关联项目必填
+
+### Work Log:
+
+#### 1. 新评分标准
+| 项目 | 分值 | 规则 |
+|------|------|------|
+| 标题 | 10分 | 填写即得分 |
+| 摘要 | 15分 | ≥20字符得满分，否则得10分 |
+| 结论 | 15分 | ≥20字符得满分，否则得10分 |
+| 关联项目 | 10分 | 关联项目即得分，提交审核必须项 |
+| 附件 | 25分 | 基础10分 + 每个附件3分（最多15分额外） |
+| AI提取信息 | 10分 | 试剂/仪器/参数/步骤各2.5分 |
+| 标签 | 10分 | 填写即得分 |
+| **总计** | **100分** | 超过60分允许提交审核 |
+
+#### 2. 后端修改 (`src/app/api/experiments/[id]/submit/route.ts`)
+- 重写 `calculateCompletenessScore` 函数
+- 新增 `tags` 参数支持
+- 修改附件评分逻辑（基础分+增量分）
+- 修改AI提取评分逻辑（各2.5分）
+
+#### 3. 前端修改
+
+**ExperimentEditor.tsx:**
+- 重写 `calculateCompleteness` 函数
+- 新增标签评分计算
+- 更新提交审核条件（必须关联项目）
+- 简化评分显示UI（紧凑网格布局）
+
+**ExperimentDetail.tsx:**
+- 更新评分显示UI
+- 更新提交条件检查
+- 移除百分比符号（改为整数显示）
+
+**ExperimentList.tsx:**
+- 更新评分显示文字（"完整度" → "评分"）
+- 移除百分比符号
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| src/app/api/experiments/[id]/submit/route.ts | 修改 | 新评分计算函数 |
+| src/components/experiments/ExperimentEditor.tsx | 修改 | 评分计算+UI简化 |
+| src/components/experiments/ExperimentDetail.tsx | 修改 | 评分显示UI |
+| src/components/experiments/ExperimentList.tsx | 修改 | 评分显示文字 |
+
+### Stage Summary:
+- ✅ 新评分标准已实现（100分制）
+- ✅ 评分UI已简化
+- ✅ 关联项目为提交审核必须项
+- ✅ Lint检查通过
+
+---
+
+## Task ID: 15 - AI智能提取功能完善
+
+**日期**: 2025-03-28
+
+**背景**: AI智能提取功能存在PDF解析错误，需要修复并完善功能
+
+### Work Log:
+
+#### 1. 问题诊断
+通过dev.log发现错误：
+```
+PDF extraction error: TypeError: pdfParse is not a function
+```
+
+问题原因：pdf-parse模块的动态导入方式不正确
+
+#### 2. 后端修复
+
+**`src/app/api/experiments/[id]/extract/route.ts`:**
+- 修复模块导入方式，改为顶层导入 `mammoth` 和 `xlsx`
+- 新增 `getPdfParse()` 动态导入函数处理pdf-parse
+- 改进 `extractTextFromAttachment` 函数的错误处理
+
+**`src/app/api/attachments/route.ts`:**
+- 同样修复PDF解析导入问题
+- 改进Word、Excel解析的导入方式
+
+#### 3. 前端错误处理增强
+
+**`src/components/experiments/ExtractedInfoPanel.tsx`:**
+- 增加错误捕获和用户提示
+- 提取失败时显示具体错误信息
+
+**`src/components/experiments/ExperimentEditor.tsx`:**
+- 改进 `handleExtract` 函数
+- 解析API返回的错误信息并抛出
+
+**`src/components/experiments/ExperimentDetail.tsx`:**
+- 更新 `handleExtract` 函数支持选择附件
+- 增加错误处理
+
+#### 4. AI提取功能设计说明
+
+**功能流程：**
+1. 用户上传附件（Word、PDF、Excel、Markdown等）
+2. 在AI提取面板选择要提取的附件（支持多选）
+3. 点击"开始AI提取"按钮
+4. 系统从附件中提取文本内容
+5. 调用AI进行智能分析，提取：
+   - 试剂信息（名称、规格、批号、厂家、用量）
+   - 仪器设备（名称、型号、设备编号）
+   - 关键参数（名称、值、单位）
+   - 实验步骤
+   - 安全注意事项
+   - 内容摘要（可应用到摘要字段）
+   - 实验结论（可应用到结论字段）
+6. 用户可编辑提取结果
+7. 可将提取的摘要/结论应用到实验记录字段
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| src/app/api/experiments/[id]/extract/route.ts | 修改 | 修复导入、增强错误处理 |
+| src/app/api/attachments/route.ts | 修改 | 修复PDF解析导入 |
+| src/components/experiments/ExtractedInfoPanel.tsx | 修改 | 增强错误反馈 |
+| src/components/experiments/ExperimentEditor.tsx | 修改 | 改进提取函数 |
+| src/components/experiments/ExperimentDetail.tsx | 修改 | 支持选择附件提取 |
+
+### Stage Summary:
+- ✅ PDF解析导入错误已修复
+- ✅ 所有文件解析功能正常
+- ✅ 前端错误反馈增强
+- ✅ 支持选择特定附件进行提取
+- ✅ Lint检查通过
+
+---
+
+## Task ID: 16 - 修复 .doc 格式文件解析
+
+**日期**: 2025-03-02
+
+**背景**: AI提取功能无法处理旧版 `.doc` 格式的Word文件，用户上传 `iMSC分化SOP_1.doc` 后AI提取失败
+
+### 问题分析
+
+通过dev.log发现错误：
+```
+[Word] Extraction failed: Error: Could not find the body element: are you sure this is a docx file?
+```
+
+**根本原因**: `mammoth` 库只支持 `.docx` 格式（新版Word），不支持 `.doc` 格式（旧版Word）
+
+### 解决方案
+
+使用系统已安装的 `antiword` 命令行工具解析 `.doc` 文件：
+- `.docx` 文件继续使用 `mammoth` 库处理
+- `.doc` 文件使用 `antiword` 命令行工具处理
+
+### Work Log:
+
+#### 1. 更新 `src/lib/fileParser.ts`
+- 将 `extractWordText` 拆分为两个函数：
+  - `extractDocxText(buffer)` - 使用 mammoth 处理 .docx 文件
+  - `extractDocText(filePath)` - 使用 antiword 处理 .doc 文件
+- 更新 `extractText` 函数，区分两种格式调用不同函数
+- 添加 `exec` 和 `promisify` 用于执行命令行工具
+
+#### 2. 更新 `src/app/api/attachments/route.ts`
+- 新增 `extractDocSummary(filePath)` 函数处理 .doc 文件预览
+- 更新 `extractPreviewData` 函数，支持传入文件路径参数
+- 修改上传流程：先保存文件再提取预览数据，确保 .doc 文件可用文件路径
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| src/lib/fileParser.ts | 重构 | 拆分Word解析函数，支持.doc和.docx |
+| src/app/api/attachments/route.ts | 修改 | 支持.doc文件预览提取 |
+
+### 验证测试:
+```bash
+# 测试 antiword 能正确解析 .doc 文件
+antiword "upload/projects/.../iMSC分化SOP_1.doc"
+# 输出：iPSC向iMSC分化SOP（包含完整文本内容）
+```
+
+### Stage Summary:
+- ✅ .doc 格式文件解析问题已修复
+- ✅ 使用 antiword 命令行工具处理旧版Word文件
+- ✅ .docx 格式继续使用 mammoth 库
+- ✅ AI提取功能现已支持 .doc 和 .docx 两种格式
+- ✅ Lint检查通过
+
+---
+
+## Task ID: 17 - AI评分系统修复
+
+**日期**: 2025-03-02
+
+**背景**: 用户报告AI评分功能两个问题：
+1. 总分不是100分
+2. 保存后完整度评分会发生变化
+
+### 问题分析
+
+#### 问题1：满分计算错误
+原评分项目总和：
+- 标题 10分
+- 摘要 15分
+- 结论 15分
+- 关联项目 10分
+- 附件 25分（基础10分 + 每个附件3分，最多15分额外）
+- AI提取 10分
+- 标签 10分
+- **总计：95分（不是100分！）**
+
+#### 问题2：保存后评分变化
+后端在计算评分时使用的是旧数据（`experiment.attachments`），如果用户刚上传了附件，这个列表可能不是最新的。
+
+### 解决方案
+
+#### 1. 修正评分标准（满分为100分）
+新评分标准：
+| 项目 | 分值 | 规则 |
+|------|------|------|
+| 标题 | 10分 | 填写即得分 |
+| 摘要 | 15分 | ≥20字符得满分，否则得10分 |
+| 结论 | 15分 | ≥20字符得满分，否则得10分 |
+| 关联项目 | 10分 | 关联即得分 |
+| 附件 | 30分 | 基础10分 + 每个附件4分（最多20分额外） |
+| AI提取 | 10分 | 试剂/仪器/参数/步骤各2.5分 |
+| 标签 | 10分 | 填写即得分 |
+| **总计** | **100分** | |
+
+#### 2. 修复保存后评分变化
+- 后端在计算评分前重新获取最新的附件列表
+- 使用 `db.attachment.findMany({ where: { experimentId: id } })` 获取最新数据
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| src/lib/completenessScore.ts | 修改 | 更新评分标准，附件30分 |
+| src/app/api/experiments/[id]/route.ts | 修改 | 重新获取附件后再计算评分 |
+| src/components/experiments/ExperimentEditor.tsx | 修改 | 更新前端评分计算 |
+| src/components/experiments/ExperimentDetail.tsx | 修改 | 更新评分显示 |
+
+### Stage Summary:
+- ✅ 评分标准已修正为满分100分
+- ✅ 附件评分改为：基础10分 + 每个附件4分（最多20分额外）
+- ✅ 后端保存时重新获取最新附件数据再计算评分
+- ✅ 前后端评分计算逻辑已统一
+- ✅ Lint检查通过

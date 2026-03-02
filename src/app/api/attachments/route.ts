@@ -4,11 +4,16 @@ import { getUserIdFromToken } from '@/lib/auth'
 import { AttachmentCategory } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import mammoth from 'mammoth'
+import * as xlsx from 'xlsx'
 import { 
   generateDraftFilePath, 
-  generateProjectFilePath, 
-  parseStorageLocation 
+  generateProjectFilePath
 } from '@/lib/file-path'
+
+const execAsync = promisify(exec)
 
 // 支持的文件类型
 const ALLOWED_TYPES: Record<string, { category: AttachmentCategory; extensions: string[] }> = {
@@ -68,18 +73,19 @@ function getFileCategory(filename: string): AttachmentCategory {
 
 // ========== 轻量级提取函数 ==========
 
-// Word文档摘要提取
+// Word文档摘要提取 (.docx)
 async function extractWordSummary(buffer: Buffer): Promise<WordPreview> {
   try {
-    const mammoth = await import('mammoth')
+    console.log('[Word .docx] Extracting summary...')
     const result = await mammoth.extractRawText({ buffer })
-    const text = result.value
+    const text = result.value || ''
     
     const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim()).length
     const chars = text.length
     const pages = Math.max(1, Math.ceil(chars / 2000))
     const summary = text.slice(0, 500).trim()
     
+    console.log(`[Word .docx] Success, chars: ${chars}`)
     return {
       type: 'word',
       pages,
@@ -88,7 +94,7 @@ async function extractWordSummary(buffer: Buffer): Promise<WordPreview> {
       summary
     }
   } catch (error) {
-    console.error('Word extraction error:', error)
+    console.error('[Word .docx] Extraction error:', error)
     return {
       type: 'word',
       pages: 0,
@@ -99,25 +105,91 @@ async function extractWordSummary(buffer: Buffer): Promise<WordPreview> {
   }
 }
 
-// PDF摘要提取
-async function extractPDFSummary(buffer: Buffer): Promise<PDFPreview> {
+// .doc 文档摘要提取 (使用 antiword)
+async function extractDocSummary(filePath: string): Promise<WordPreview> {
   try {
-    // pdf-parse 动态导入方式
-    // @ts-ignore - pdf-parse 模块的类型定义问题
-    const pdfParse = (await import('pdf-parse')).default
-    const data = await pdfParse(buffer, { max: 5 })
+    console.log('[Word .doc] Extracting summary with antiword...')
     
-    const pages = data.numpages || 1
-    const text = data.text || ''
+    const { stdout, stderr } = await execAsync(`antiword "${filePath}"`, {
+      maxBuffer: 10 * 1024 * 1024
+    })
+
+    if (stderr && !stdout) {
+      throw new Error(stderr)
+    }
+
+    const text = stdout || ''
+    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim()).length
     const chars = text.length
+    const pages = Math.max(1, Math.ceil(chars / 2000))
     const summary = text.slice(0, 500).trim()
     
+    console.log(`[Word .doc] Success, chars: ${chars}`)
     return {
-      type: 'pdf',
+      type: 'word',
       pages,
+      paragraphs,
       chars,
       summary
     }
+  } catch (error) {
+    console.error('[Word .doc] Extraction error:', error)
+    return {
+      type: 'word',
+      pages: 0,
+      paragraphs: 0,
+      chars: 0,
+      summary: ''
+    }
+  }
+}
+
+// PDF摘要提取 - 使用新的 fileParser
+async function extractPDFSummary(buffer: Buffer): Promise<PDFPreview> {
+  try {
+    console.log('[PDF Attachments] Starting PDF extraction...')
+    
+    // 使用 pdf2json 提取
+    const PDFParser = (await import('pdf2json')).default || (await import('pdf2json'))
+    
+    return new Promise((resolve) => {
+      const pdfParser = new (PDFParser as any)(null, 1)
+      let allText = ''
+      let pageCount = 1
+      
+      pdfParser.on('pdfParser_dataError', () => {
+        resolve({
+          type: 'pdf',
+          pages: 1,
+          chars: 0,
+          summary: ''
+        })
+      })
+      
+      pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+        pageCount = pdfData.Pages?.length || 1
+        for (const page of pdfData.Pages || []) {
+          for (const textItem of page.Texts || []) {
+            const decodedText = decodeURIComponent(textItem.R?.[0]?.T || '')
+            allText += decodedText + ' '
+          }
+          allText += '\n'
+        }
+        
+        const chars = allText.length
+        const summary = allText.slice(0, 500).trim()
+        
+        console.log(`[PDF Attachments] Success, pages: ${pageCount}, chars: ${chars}`)
+        resolve({
+          type: 'pdf',
+          pages: pageCount,
+          chars,
+          summary
+        })
+      })
+      
+      pdfParser.parseBuffer(buffer)
+    })
   } catch (error) {
     console.error('PDF extraction error:', error)
     return {
@@ -132,7 +204,6 @@ async function extractPDFSummary(buffer: Buffer): Promise<PDFPreview> {
 // Excel摘要提取
 async function extractExcelSummary(buffer: Buffer): Promise<ExcelPreview> {
   try {
-    const xlsx = await import('xlsx')
     const workbook = xlsx.read(buffer, { type: 'buffer' })
     
     const sheets: ExcelSheetPreview[] = []
@@ -193,12 +264,18 @@ async function extractMarkdownSummary(buffer: Buffer): Promise<{ type: 'markdown
   }
 }
 
-// 主提取函数
-async function extractPreviewData(filename: string, buffer: Buffer): Promise<PreviewData> {
+// 主提取函数 - 支持传入文件路径用于 .doc 文件
+async function extractPreviewData(filename: string, buffer: Buffer, filePath?: string): Promise<PreviewData> {
   const ext = path.extname(filename).toLowerCase()
   
   if (ext === '.docx') {
     return await extractWordSummary(buffer)
+  } else if (ext === '.doc') {
+    // .doc 文件需要文件路径，使用 antiword
+    if (filePath) {
+      return await extractDocSummary(filePath)
+    }
+    return null
   } else if (ext === '.pdf') {
     return await extractPDFSummary(buffer)
   } else if (ext === '.xlsx' || ext === '.xls') {
@@ -285,8 +362,8 @@ export async function POST(request: NextRequest) {
     // 保存文件
     fs.writeFileSync(filePathResult.fullPath, buffer)
 
-    // 提取轻量级预览数据
-    const previewData = await extractPreviewData(file.name, buffer)
+    // 提取轻量级预览数据（传入文件路径以支持 .doc 文件）
+    const previewData = await extractPreviewData(file.name, buffer, filePathResult.fullPath)
     
     // 创建附件记录
     const attachment = await db.attachment.create({

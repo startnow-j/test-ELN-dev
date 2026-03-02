@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserIdFromToken } from '@/lib/auth'
 import ZAI from 'z-ai-web-dev-sdk'
-import fs from 'fs'
-import path from 'path'
+import { extractText } from '@/lib/fileParser'
 
 // AI提取信息结构
 interface ExtractedInfo {
@@ -30,46 +29,22 @@ interface ExtractedInfo {
   conclusion?: string
 }
 
-// 从附件提取文本
-async function extractTextFromAttachment(attachment: {
-  path: string
-  name: string
-  type: string
-}): Promise<string> {
-  const filePath = path.join(process.cwd(), attachment.path)
-  
-  if (!fs.existsSync(filePath)) {
-    throw new Error('文件不存在')
-  }
-  
-  const buffer = fs.readFileSync(filePath)
-  const ext = path.extname(attachment.name).toLowerCase()
-  
-  if (ext === '.docx') {
-    const mammoth = await import('mammoth')
-    const result = await mammoth.extractRawText({ buffer })
-    return result.value
-  } else if (ext === '.pdf') {
-    // @ts-ignore - pdf-parse 模块的类型定义问题
-    const pdfParse = (await import('pdf-parse')).default
-    const data = await pdfParse(buffer)
-    return data.text || ''
-  } else if (ext === '.xlsx' || ext === '.xls') {
-    const xlsx = await import('xlsx')
-    const workbook = xlsx.read(buffer, { type: 'buffer' })
-    let text = ''
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName]
-      text += `工作表: ${sheetName}\n`
-      text += xlsx.utils.sheet_to_csv(sheet) + '\n\n'
-    }
-    return text
-  } else if (ext === '.md' || ext === '.tex' || ext === '.txt') {
-    return buffer.toString('utf-8')
-  }
-  
-  return ''
+// AI提取提示词
+const EXTRACTION_PROMPT = `你是一个专业的生物实验室数据提取助手。请从以下实验记录内容中提取关键信息。
+
+请按以下JSON格式返回提取结果（不要添加任何其他文字，只返回JSON）：
+{
+  "reagents": [{"name": "试剂名称", "specification": "规格", "batch": "批号", "manufacturer": "厂家", "amount": "用量"}],
+  "instruments": [{"name": "仪器名称", "model": "型号", "equipmentId": "设备编号"}],
+  "parameters": [{"name": "参数名称", "value": "数值", "unit": "单位"}],
+  "steps": ["步骤1", "步骤2", ...],
+  "safetyNotes": ["安全注意事项1", "安全注意事项2", ...],
+  "rawSummary": "实验目的和方法的简要总结(用于摘要字段)",
+  "conclusion": "实验结论和分析总结(用于结论字段)"
 }
+
+实验记录内容：
+`
 
 // AI提取接口
 export async function POST(
@@ -127,26 +102,33 @@ export async function POST(
     })
 
     try {
-      // 提取选定附件的文本
-      let allText = ''
+      // 提取所有附件文本
+      const texts: string[] = []
       for (const attachment of targetAttachments) {
         try {
-          const text = await extractTextFromAttachment(attachment)
-          allText += `【文件: ${attachment.name}】\n${text}\n\n`
+          console.log(`[Extract] Processing ${attachment.name}...`)
+          const text = await extractText(attachment.path, attachment.type)
+          if (text.trim()) {
+            texts.push(`【${attachment.name}】\n${text}`)
+          }
         } catch (err) {
-          console.error(`Failed to extract from ${attachment.name}:`, err)
+          console.error(`[Extract] Failed to extract from ${attachment.name}:`, err)
         }
       }
 
-      if (!allText.trim()) {
+      const combinedText = texts.join('\n\n---\n\n')
+
+      if (!combinedText.trim()) {
         throw new Error('无法从附件中提取文本内容')
       }
 
       // 限制文本长度（避免超出token限制）
       const maxChars = 10000
-      const truncatedText = allText.length > maxChars 
-        ? allText.slice(0, maxChars) + '...(内容已截断)'
-        : allText
+      const truncatedText = combinedText.length > maxChars 
+        ? combinedText.slice(0, maxChars) + '...(内容已截断)'
+        : combinedText
+
+      console.log(`[AI Extract] Combined text length: ${combinedText.length}, truncated: ${truncatedText.length}`)
 
       // 调用AI进行提取
       const zai = await ZAI.create()
@@ -169,9 +151,7 @@ export async function POST(
           },
           {
             role: 'user',
-            content: `请分析以下实验记录内容，提取关键信息：
-
-${truncatedText}`
+            content: EXTRACTION_PROMPT + truncatedText
           }
         ],
         thinking: { type: 'disabled' }
@@ -182,6 +162,8 @@ ${truncatedText}`
       if (!responseText) {
         throw new Error('AI未返回结果')
       }
+
+      console.log(`[AI Extract] Response length: ${responseText.length}`)
 
       // 解析JSON
       let extractedInfo: ExtractedInfo

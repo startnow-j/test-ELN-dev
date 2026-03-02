@@ -9,6 +9,7 @@ import {
   deleteCrossProjectLink,
   shouldMigrateExperiment
 } from '@/lib/experiment-migration'
+import { calculateCompletenessScore } from '@/lib/completenessScore'
 import fs from 'fs'
 import path from 'path'
 
@@ -165,6 +166,7 @@ export async function PUT(
     // 处理项目关联变更
     let newStorageLocation = experiment.storageLocation
     let newPrimaryProjectId = experiment.primaryProjectId
+    let updatedExperimentProjects = experiment.experimentProjects
     
     if (projectIds !== undefined) {
       // 获取当前项目ID列表
@@ -241,6 +243,9 @@ export async function PUT(
           }))
         })
       }
+      
+      // 更新后的项目关联列表用于评分计算
+      updatedExperimentProjects = newProjectIds.map(pid => ({ projectId: pid }))
     }
 
     // 创建版本历史
@@ -255,14 +260,20 @@ export async function PUT(
       }
     })
 
-    // 计算完整度评分
+    // 重新获取最新的附件列表（确保评分计算使用最新数据）
+    const latestAttachments = await db.attachment.findMany({
+      where: { experimentId: id }
+    })
+
+    // 计算完整度评分（使用最新数据）
     const score = calculateCompletenessScore({
       title,
       summary,
       conclusion,
       extractedInfo,
-      hasAttachments: experiment.attachments.length > 0,
-      hasProjects: projectIds !== undefined ? (projectIds as string[]).length > 0 : experiment.experimentProjects.length > 0
+      tags,
+      attachments: latestAttachments,
+      experimentProjects: updatedExperimentProjects
     })
 
     // 更新实验
@@ -471,68 +482,4 @@ function cleanupEmptyDirectories(dirPath: string): void {
   } catch (error) {
     console.error('Cleanup empty directories error:', error)
   }
-}
-
-// 计算完整度评分
-function calculateCompletenessScore(data: {
-  title?: string
-  summary?: string | null
-  conclusion?: string | null
-  extractedInfo?: any
-  hasAttachments?: boolean
-  hasProjects?: boolean
-}): number {
-  let score = 0
-
-  // 标题 (10分)
-  if (data.title && data.title.trim().length > 0) {
-    score += 10
-  }
-
-  // 摘要 (15分)
-  if (data.summary && data.summary.trim().length >= 20) {
-    score += 15
-  } else if (data.summary && data.summary.trim().length > 0) {
-    score += 8
-  }
-
-  // 结论 (15分)
-  if (data.conclusion && data.conclusion.trim().length >= 20) {
-    score += 15
-  } else if (data.conclusion && data.conclusion.trim().length > 0) {
-    score += 8
-  }
-
-  // 关联项目 (15分)
-  if (data.hasProjects) {
-    score += 15
-  }
-
-  // 附件 (25分)
-  if (data.hasAttachments) {
-    score += 25
-  }
-
-  // AI提取信息 (20分)
-  if (data.extractedInfo) {
-    const info = data.extractedInfo
-    // 试剂信息
-    if (info.reagents && info.reagents.length > 0) {
-      score += Math.min(5, info.reagents.length * 2)
-    }
-    // 仪器信息
-    if (info.instruments && info.instruments.length > 0) {
-      score += Math.min(5, info.instruments.length * 2)
-    }
-    // 参数信息
-    if (info.parameters && info.parameters.length > 0) {
-      score += Math.min(5, info.parameters.length * 2)
-    }
-    // 实验步骤
-    if (info.steps && info.steps.length > 0) {
-      score += Math.min(5, info.steps.length * 2)
-    }
-  }
-
-  return Math.min(100, score)
 }

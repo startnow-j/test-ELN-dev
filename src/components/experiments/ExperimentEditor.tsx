@@ -94,39 +94,46 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
     }
   }, [experimentId, experiments])
 
-  // 计算完整度评分
+  // 计算完整度评分（v3.3 新评分标准 - 满分100分）
+  // 标题 10分 | 摘要 15分 | 结论 15分 | 关联项目 10分 | 附件 30分 | AI提取 10分 | 标签 10分
   const calculateCompleteness = useCallback(() => {
     let score = 0
     
-    // 标题 10分
+    // 标题 10分 - 填写即得分
     if (title.trim()) score += 10
     
-    // 摘要 15分 (至少20字符)
+    // 摘要 15分 - ≥20字符得满分，否则得10分
     if (summary.trim()) {
-      score += summary.length >= 20 ? 15 : Math.floor(summary.length / 20 * 15)
+      score += summary.length >= 20 ? 15 : 10
     }
     
-    // 结论 15分 (至少20字符)
+    // 结论 15分 - ≥20字符得满分，否则得10分
     if (conclusion.trim()) {
-      score += conclusion.length >= 20 ? 15 : Math.floor(conclusion.length / 20 * 15)
+      score += conclusion.length >= 20 ? 15 : 10
     }
     
-    // 关联项目 10分
+    // 关联项目 10分 - 关联即得分
     if (selectedProjects.length > 0) score += 10
     
-    // 附件 10分
-    if (attachments.length > 0) score += 10
-    
-    // AI提取信息 20分
-    if (extractedInfo) {
-      if (extractedInfo.reagents?.length) score += 5
-      if (extractedInfo.instruments?.length) score += 5
-      if (extractedInfo.parameters?.length) score += 5
-      if (extractedInfo.steps?.length) score += 5
+    // 附件 30分 - 基础15分 + 每个附件5分（最多15分额外）
+    if (attachments.length > 0) {
+      score += 15 // 基础分
+      score += Math.min(15, attachments.length * 5) // 每个附件5分，最多15分
     }
     
-    return Math.min(score, 100)
-  }, [title, summary, conclusion, selectedProjects, attachments, extractedInfo])
+    // AI提取信息 10分 - 试剂/仪器/参数/步骤各2.5分
+    if (extractedInfo) {
+      if (extractedInfo.reagents?.length) score += 2.5
+      if (extractedInfo.instruments?.length) score += 2.5
+      if (extractedInfo.parameters?.length) score += 2.5
+      if (extractedInfo.steps?.length) score += 2.5
+    }
+    
+    // 标签 10分 - 填写即得分
+    if (tags.trim()) score += 10
+    
+    return Math.min(100, Math.round(score))
+  }, [title, summary, conclusion, selectedProjects, attachments, extractedInfo, tags])
 
   // 更新完整度评分
   useEffect(() => {
@@ -136,7 +143,8 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
 
   // 判断是否可编辑
   const canEdit = reviewStatus === 'DRAFT' || reviewStatus === 'NEEDS_REVISION'
-  const canSubmit = completenessScore >= 60 && canEdit
+  // 提交审核条件：评分>=60 且 必须关联项目
+  const canSubmit = completenessScore >= 60 && selectedProjects.length > 0 && canEdit
 
   // 刷新实验数据
   const refreshExperimentData = useCallback(async () => {
@@ -199,6 +207,12 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
   const handleSubmitReview = async () => {
     if (!experimentId) return
     
+    // 检查关联项目
+    if (selectedProjects.length === 0) {
+      alert('请先关联项目才能提交审核')
+      return
+    }
+    
     if (completenessScore < 60) {
       alert('完整度不足60分，无法提交审核')
       return
@@ -223,7 +237,7 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
   }
 
   // AI提取处理 - 支持选择特定附件
-  const handleExtract = async (attachmentIds: string[]) => {
+  const handleExtract = async (attachmentIds: string[]): Promise<boolean> => {
     if (!experimentId || attachmentIds.length === 0) return false
     
     try {
@@ -239,11 +253,13 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
         setExtractedInfo(updated.extractedInfo)
         await refreshData()
         return true
+      } else {
+        const errorData = await res.json().catch(() => ({ error: '提取失败' }))
+        throw new Error(errorData.error || 'AI提取失败')
       }
-      return false
     } catch (error) {
       console.error('Failed to extract:', error)
-      return false
+      throw error
     }
   }
 
@@ -302,11 +318,11 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* 完整度评分 */}
+          {/* 评分 */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted">
-            <span className="text-sm text-muted-foreground">完整度</span>
+            <span className="text-sm text-muted-foreground">评分</span>
             <span className={`text-lg font-bold ${getScoreColor(completenessScore)}`}>
-              {completenessScore}%
+              {completenessScore}
             </span>
           </div>
           
@@ -479,58 +495,74 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
 
           {/* 右侧 - AI提取面板 */}
           <div className="space-y-6">
-            {/* 完整度进度 */}
+            {/* 完整度评分 - 简洁显示 */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">完整度评分</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center justify-between">
+                  <span>评分</span>
+                  <span className={`text-2xl font-bold ${getScoreColor(completenessScore)}`}>
+                    {completenessScore}
+                  </span>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{completenessScore}%</span>
-                  <Progress value={completenessScore} className="w-24" />
-                </div>
-                <div className="space-y-2 text-sm">
+              <CardContent className="space-y-3">
+                <Progress value={completenessScore} className="h-2" />
+                
+                {/* 评分明细 - 紧凑网格 */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">标题</span>
-                    <span className={title.trim() ? 'text-green-600' : 'text-muted-foreground'}>
-                      {title.trim() ? '✓ 10分' : '0分'}
-                    </span>
+                    <span className={title.trim() ? 'text-green-600' : ''}>{title.trim() ? '✓' : '-'} 10</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">摘要</span>
-                    <span className={summary.length >= 20 ? 'text-green-600' : 'text-muted-foreground'}>
-                      {summary.length >= 20 ? '✓ 15分' : `${Math.floor(summary.length / 20 * 15)}分`}
-                    </span>
+                    <span className={summary.trim() ? 'text-green-600' : ''}>{summary.trim() ? (summary.length >= 20 ? '✓ 15' : '10') : '- 0'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">结论</span>
-                    <span className={conclusion.length >= 20 ? 'text-green-600' : 'text-muted-foreground'}>
-                      {conclusion.length >= 20 ? '✓ 15分' : `${Math.floor(conclusion.length / 20 * 15)}分`}
-                    </span>
+                    <span className={conclusion.trim() ? 'text-green-600' : ''}>{conclusion.trim() ? (conclusion.length >= 20 ? '✓ 15' : '10') : '- 0'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">关联项目</span>
-                    <span className={selectedProjects.length > 0 ? 'text-green-600' : 'text-muted-foreground'}>
-                      {selectedProjects.length > 0 ? '✓ 10分' : '0分'}
-                    </span>
+                    <span className="text-muted-foreground">项目</span>
+                    <span className={selectedProjects.length > 0 ? 'text-green-600' : ''}>{selectedProjects.length > 0 ? '✓' : '-'} 10</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">附件</span>
-                    <span className={attachments.length > 0 ? 'text-green-600' : 'text-muted-foreground'}>
-                      {attachments.length > 0 ? '✓ 10分' : '0分'}
+                    <span className={attachments.length > 0 ? 'text-green-600' : ''}>
+                      {attachments.length > 0 ? `${15 + Math.min(15, attachments.length * 5)}` : '- 0'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">AI提取</span>
-                    <span className={extractedInfo ? 'text-green-600' : 'text-muted-foreground'}>
-                      {extractedInfo ? '✓ 20分' : '0分'}
+                    <span className="text-muted-foreground">AI</span>
+                    <span className={extractedInfo ? 'text-green-600' : ''}>
+                      {extractedInfo ? Math.round(
+                        (extractedInfo.reagents?.length ? 2.5 : 0) +
+                        (extractedInfo.instruments?.length ? 2.5 : 0) +
+                        (extractedInfo.parameters?.length ? 2.5 : 0) +
+                        (extractedInfo.steps?.length ? 2.5 : 0)
+                      ) : '- 0'}
                     </span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">标签</span>
+                    <span className={tags.trim() ? 'text-green-600' : ''}>{tags.trim() ? '✓' : '-'} 10</span>
+                  </div>
                 </div>
-                <Separator />
-                <p className="text-xs text-muted-foreground">
-                  完整度达到60%才能提交审核
-                </p>
+                
+                <Separator className="my-2" />
+                
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {selectedProjects.length === 0 ? (
+                      <span className="text-amber-600">需关联项目</span>
+                    ) : completenessScore < 60 ? (
+                      <span className="text-amber-600">需≥60分提交</span>
+                    ) : (
+                      <span className="text-green-600">可提交审核</span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">满分100</span>
+                </div>
               </CardContent>
             </Card>
 
