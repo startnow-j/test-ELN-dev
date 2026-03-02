@@ -1,7 +1,7 @@
 # BioLab ELN 项目管理模块说明文档
 
-> **版本**: v3.3  
-> **最后更新**: 2025-03-01  
+> **版本**: v3.3.1  
+> **最后更新**: 2025-03-02  
 > **维护者**: 开发团队
 
 ---
@@ -30,6 +30,9 @@
 - 项目状态流转
 - 项目文档管理
 - 项目归档与实验锁定联动
+- **全局视角切换**（管理员可查看所有项目）
+- **项目主负责人**（支持手写填入）
+- **日期概念分离**（预计结束日期/真实结束日期）
 
 ### 1.2 核心概念
 
@@ -37,8 +40,11 @@
 |------|------|
 | **项目** | 研究工作的组织单元，包含实验记录、文档、成员 |
 | **项目负责人** | 项目创建者或被指定为 PROJECT_LEAD 的成员 |
+| **项目主负责人** | 手写填入的主要负责人姓名（v3.3新增） |
 | **项目状态** | ACTIVE（活跃）→ COMPLETED/ARCHIVED（完成/归档） |
 | **项目文档** | 项目级别的文档文件（立项报告、阶段性总结、结题报告等） |
+| **全局视角** | 管理员可查看所有项目的视图模式（v3.3新增） |
+| **普通视角** | 用户查看自己创建和参与的项目的视图模式（v3.3新增） |
 
 ---
 
@@ -52,8 +58,20 @@ model Project {
   name        String
   description String?
   status      ProjectStatus @default(ACTIVE)
-  startDate   DateTime?
-  endDate     DateTime?
+
+  // 日期相关（v3.3新增）
+  startDate       DateTime?   // 开始日期
+  endDate         DateTime?   // 结束日期（保留兼容）
+  expectedEndDate DateTime?   // 预计结束日期
+  actualEndDate   DateTime?   // 真实结束日期（项目结束时记录）
+
+  // 状态时间戳（v3.3新增）
+  completedAt DateTime?   // 结束时间
+  archivedAt  DateTime?   // 归档时间
+
+  // 项目负责人信息（v3.3新增）
+  primaryLeader   String?   // 项目主负责人（手写填入）
+
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -563,6 +581,29 @@ const updated = await db.$transaction(async (tx) => {
 ---
 
 ## 8. 变更记录
+
+### v3.3.1 (2025-03-02)
+
+**新增功能**:
+- [x] 项目主负责人字段 (`primaryLeader`) - 支持手写填入
+- [x] 全局视角切换 - 管理员可查看所有项目
+- [x] 视角简化 - 简化为普通视角/全局视角两种模式
+- [x] 成员数计算优化 - 返回 `memberCount` 字段
+
+**数据库变更**:
+- `Project` 模型新增 `primaryLeader` 字段（String?）
+- `Project` 模型新增 `expectedEndDate` 字段（预计结束日期）
+- `Project` 模型新增 `actualEndDate` 字段（真实结束日期）
+- `Project` 模型新增 `completedAt` 字段（结束时间戳）
+- `Project` 模型新增 `archivedAt` 字段（归档时间戳）
+
+**修改文件**:
+- `prisma/schema.prisma` - 新增字段
+- `src/app/api/projects/route.ts` - 视角切换、memberCount
+- `src/app/api/projects/[id]/route.ts` - 支持新字段更新
+- `src/components/projects/ProjectList.tsx` - 视角切换UI
+- `src/components/projects/ProjectDetail.tsx` - 主负责人编辑
+- `src/components/projects/CreateProjectDialog.tsx` - 主负责人输入
 
 ### v3.3 (2025-03-01)
 

@@ -1026,3 +1026,51 @@ antiword "upload/projects/.../iMSC分化SOP_1.doc"
 - ✅ 后端保存时重新获取最新附件数据再计算评分
 - ✅ 前后端评分计算逻辑已统一
 - ✅ Lint检查通过
+
+---
+
+## Task ID: 18 - v3.3.1 文档审核与更新
+
+**日期**: 2025-03-02
+
+**背景**: 会话恢复后，根据用户要求进行功能模块文档审核，确保文档与实际代码实现一致
+
+### Work Log:
+
+#### 1. 文档审核范围
+- `docs/SYSTEM_FEATURES_v3.3.md` - 系统功能规划
+- `docs/EXPERIMENT_MODULE.md` - 实验记录模块
+- `docs/REVIEW_MODULE.md` - 审核管理模块
+- `docs/PROJECT_MODULE.md` - 项目管理模块
+- `docs/MY_TASKS_MODULE.md` - 我的任务模块
+- `docs/FILE_MANAGEMENT_MODULE.md` - 文件管理模块
+
+#### 2. 文档更新内容
+
+**SYSTEM_FEATURES_v3.3.md:**
+- 版本更新为 v2.3
+- 新增项目管理模块优化记录（主负责人、全局视角、成员数优化）
+- 更新适用版本范围
+
+**PROJECT_MODULE.md:**
+- 版本更新为 v3.3.1
+- 新增功能定位：全局视角切换、项目主负责人、日期概念分离
+- 新增核心概念：项目主负责人、全局视角、普通视角
+- 更新 Project 模型数据结构（primaryLeader、expectedEndDate、actualEndDate、completedAt、archivedAt）
+- 新增 v3.3.1 变更记录
+
+**MY_TASKS_MODULE.md:**
+- 版本更新为 v3.3.1
+- 完善版本历史记录
+- 添加具体日期
+
+#### 3. 已确认无需更新的文档
+- `EXPERIMENT_MODULE.md` - 已包含最新评分规则和.doc支持
+- `REVIEW_MODULE.md` - 已包含60分提交要求
+- `FILE_MANAGEMENT_MODULE.md` - 已包含.doc文件支持
+
+### Stage Summary:
+- ✅ 所有模块文档已审核完成
+- ✅ 3个文档已更新
+- ✅ 文档版本号已统一更新为 v3.3.1
+- ✅ 变更记录已完善
