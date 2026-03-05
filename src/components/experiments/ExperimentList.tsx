@@ -14,6 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu'
 import { 
   Plus, 
   Search, 
@@ -27,7 +35,10 @@ import {
   FileText,
   FolderOpen,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  User,
+  ChevronDown
 } from 'lucide-react'
 import { useApp, ReviewStatus, Experiment } from '@/contexts/AppContext'
 
@@ -60,6 +71,15 @@ const reviewStatusConfig: Record<ReviewStatus, { label: string; color: string; i
   },
 }
 
+// 视角类型
+type ViewMode = 'default' | 'global'
+
+// 视角配置
+const viewModeConfig: Record<ViewMode, { label: string; description: string; icon: React.ReactNode }> = {
+  default: { label: '普通视角', description: '显示我参与的实验', icon: <User className="w-4 h-4" /> },
+  global: { label: '全局视角', description: '显示所有实验（管理员）', icon: <Globe className="w-4 h-4" /> },
+}
+
 // 计算暂存天数
 function getDaysSinceCreation(createdAt: string): number {
   const created = new Date(createdAt)
@@ -80,6 +100,15 @@ export function ExperimentList({ onCreateExperiment, onViewExperiment }: Experim
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<'projects' | 'drafts'>('projects')
   const [isLoading, setIsLoading] = useState(false)
+  
+  // 视角状态 - 初始值使用函数计算
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
+  const [viewMode, setViewMode] = useState<ViewMode>(() => 
+    isAdmin ? 'global' : 'default'
+  )
+  
+  // 是否使用全局视角
+  const useGlobalView = viewMode === 'global' && isAdmin
 
   // 刷新数据
   const handleRefresh = async () => {
@@ -89,12 +118,18 @@ export function ExperimentList({ onCreateExperiment, onViewExperiment }: Experim
   }
 
   // 分离项目相关和暂存实验
-  const projectExperiments = experiments.filter(exp => 
-    exp.storageLocation !== 'draft' && exp.projects.length > 0
-  )
-  const draftExperiments = experiments.filter(exp => 
-    exp.storageLocation === 'draft' || (!exp.storageLocation && exp.projects.length === 0)
-  )
+  // 全局视角下显示所有实验
+  const projectExperiments = useGlobalView
+    ? experiments.filter(exp => exp.storageLocation !== 'draft' && exp.projects.length > 0)
+    : experiments.filter(exp => 
+        exp.storageLocation !== 'draft' && exp.projects.length > 0
+      )
+  
+  const draftExperiments = useGlobalView
+    ? experiments.filter(exp => exp.storageLocation === 'draft' || (!exp.storageLocation && exp.projects.length === 0))
+    : experiments.filter(exp => 
+        exp.storageLocation === 'draft' || (!exp.storageLocation && exp.projects.length === 0)
+      )
 
   // 计算超过10天未关联的暂存实验数量
   const staleDraftCount = draftExperiments.filter(exp => 
@@ -147,10 +182,41 @@ export function ExperimentList({ onCreateExperiment, onViewExperiment }: Experim
         <div>
           <h1 className="text-3xl font-bold tracking-tight">实验记录</h1>
           <p className="text-muted-foreground mt-1">
-            管理您的所有实验记录
+            {useGlobalView ? '管理所有用户的实验记录（全局视角）' : '管理您的所有实验记录'}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 视角切换（仅管理员可见） */}
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  {viewModeConfig[viewMode].icon}
+                  {viewModeConfig[viewMode].label}
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>切换视角</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {Object.entries(viewModeConfig).map(([mode, config]) => (
+                  <DropdownMenuItem
+                    key={mode}
+                    onClick={() => setViewMode(mode as ViewMode)}
+                    className={viewMode === mode ? 'bg-muted' : ''}
+                  >
+                    <div className="flex items-center gap-2">
+                      {config.icon}
+                      <div>
+                        <p className="font-medium">{config.label}</p>
+                        <p className="text-xs text-muted-foreground">{config.description}</p>
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>

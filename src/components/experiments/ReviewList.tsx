@@ -1,3 +1,20 @@
+/**
+ * @deprecated 此组件已废弃，功能已合并到 MyTasks 组件
+ * 
+ * 变更说明：
+ * - 审核功能已统一到"我的任务"模块
+ * - 用户可通过侧边栏"我的任务"入口访问审核功能
+ * - 此文件保留仅供参考，后续版本可删除
+ * 
+ * 迁移指南：
+ * - "待审核" Tab → MyTasks 组件的"待我审核" Tab
+ * - "待修改" Tab → MyTasks 组件的"待我修改" Tab  
+ * - "已锁定" Tab → MyTasks 组件的"我的已锁定记录" Tab
+ * 
+ * @see src/components/tasks/MyTasks.tsx
+ * @since v3.4
+ */
+
 'use client'
 
 import { useState } from 'react'

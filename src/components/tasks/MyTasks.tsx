@@ -23,6 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu'
 import { 
   Search, 
   FlaskConical,
@@ -42,7 +50,10 @@ import {
   X,
   Eye,
   History,
-  Inbox
+  Inbox,
+  Globe,
+  User,
+  ChevronDown
 } from 'lucide-react'
 import { useApp, Experiment, ReviewStatus, ReviewFeedback } from '@/contexts/AppContext'
 import { useToast } from '@/hooks/use-toast'
@@ -76,12 +87,32 @@ const reviewStatusConfig: Record<ReviewStatus, { label: string; color: string; i
   },
 }
 
+// 视角类型
+type ViewMode = 'default' | 'global'
+
+// 视角配置
+const viewModeConfig: Record<ViewMode, { label: string; description: string; icon: React.ReactNode }> = {
+  default: { label: '普通视角', description: '显示我的任务', icon: <User className="w-4 h-4" /> },
+  global: { label: '全局视角', description: '显示所有任务（管理员）', icon: <Globe className="w-4 h-4" /> },
+}
+
 export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
   const { currentUser, experiments, projects, refreshData, reviewExperiment } = useApp()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('drafts')
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  
+  // 视角状态
+  const [viewMode, setViewMode] = useState<ViewMode>('default')
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
+  
+  // 管理员默认使用全局视角
+  useEffect(() => {
+    if (isAdmin && viewMode === 'default') {
+      setViewMode('global')
+    }
+  }, [isAdmin])
 
   // 审核对话框状态
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
@@ -100,27 +131,34 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
   const [feedbackExperiment, setFeedbackExperiment] = useState<Experiment | null>(null)
 
-  // 计算各类实验数量
-  const myDrafts = experiments.filter(
-    e => e.reviewStatus === 'DRAFT' && e.authorId === currentUser?.id
-  )
-
   // 作为项目负责人的项目
   const myProjectsAsLead = projects.filter(p => p.ownerId === currentUser?.id)
-  const pendingMyReview = experiments.filter(
-    e => {
-      if (e.reviewStatus !== 'PENDING_REVIEW') return false
-      return e.projects.some(p => myProjectsAsLead.some(mp => mp.id === p.id))
-    }
-  )
+  
+  // 根据视角计算各类实验数量
+  const useGlobalView = viewMode === 'global' && isAdmin
+  
+  // 我的草稿
+  const myDrafts = useGlobalView
+    ? experiments.filter(e => e.reviewStatus === 'DRAFT')
+    : experiments.filter(e => e.reviewStatus === 'DRAFT' && e.authorId === currentUser?.id)
 
-  const needsMyRevision = experiments.filter(
-    e => e.reviewStatus === 'NEEDS_REVISION' && e.authorId === currentUser?.id
-  )
+  // 待我审核
+  const pendingMyReview = useGlobalView
+    ? experiments.filter(e => e.reviewStatus === 'PENDING_REVIEW')
+    : experiments.filter(e => {
+        if (e.reviewStatus !== 'PENDING_REVIEW') return false
+        return e.projects.some(p => myProjectsAsLead.some(mp => mp.id === p.id))
+      })
 
-  const myLockedRecords = experiments.filter(
-    e => e.reviewStatus === 'LOCKED' && e.authorId === currentUser?.id
-  )
+  // 待我修改
+  const needsMyRevision = useGlobalView
+    ? experiments.filter(e => e.reviewStatus === 'NEEDS_REVISION')
+    : experiments.filter(e => e.reviewStatus === 'NEEDS_REVISION' && e.authorId === currentUser?.id)
+
+  // 已锁定
+  const myLockedRecords = useGlobalView
+    ? experiments.filter(e => e.reviewStatus === 'LOCKED')
+    : experiments.filter(e => e.reviewStatus === 'LOCKED' && e.authorId === currentUser?.id)
 
   // 刷新数据
   const handleRefresh = async () => {
@@ -242,12 +280,45 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">我的任务</h1>
           <p className="text-muted-foreground mt-1">
-            管理您的实验记录任务和审核工作
+            {useGlobalView ? '管理所有用户的任务（全局视角）' : '管理您的实验记录任务和审核工作'}
           </p>
         </div>
-        <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* 视角切换（仅管理员可见） */}
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  {viewModeConfig[viewMode].icon}
+                  {viewModeConfig[viewMode].label}
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>切换视角</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {Object.entries(viewModeConfig).map(([mode, config]) => (
+                  <DropdownMenuItem
+                    key={mode}
+                    onClick={() => setViewMode(mode as ViewMode)}
+                    className={viewMode === mode ? 'bg-muted' : ''}
+                  >
+                    <div className="flex items-center gap-2">
+                      {config.icon}
+                      <div>
+                        <p className="font-medium">{config.label}</p>
+                        <p className="text-xs text-muted-foreground">{config.description}</p>
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
 
       {/* Tab 分类 */}
@@ -255,28 +326,28 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="drafts" className="gap-2">
             <FileEdit className="w-4 h-4" />
-            <span className="hidden sm:inline">我的草稿</span>
+            <span className="hidden sm:inline">{useGlobalView ? '所有草稿' : '我的草稿'}</span>
             <Badge variant="secondary" className="ml-1">
               {myDrafts.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="pending-review" className="gap-2">
             <CheckCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">待我审核</span>
+            <span className="hidden sm:inline">{useGlobalView ? '待审核' : '待我审核'}</span>
             <Badge variant="secondary" className="ml-1">
               {pendingMyReview.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="needs-revision" className="gap-2">
             <RefreshCw className="w-4 h-4" />
-            <span className="hidden sm:inline">待我修改</span>
+            <span className="hidden sm:inline">{useGlobalView ? '待修改' : '待我修改'}</span>
             <Badge variant="secondary" className="ml-1">
               {needsMyRevision.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="locked" className="gap-2">
             <Lock className="w-4 h-4" />
-            <span className="hidden sm:inline">已锁定</span>
+            <span className="hidden sm:inline">{useGlobalView ? '已锁定' : '已锁定'}</span>
             <Badge variant="secondary" className="ml-1">
               {myLockedRecords.length}
             </Badge>
@@ -315,6 +386,7 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
                     actionVariant="default"
                     formatDate={formatDate}
                     getScoreColor={getScoreColor}
+                    showAuthor={useGlobalView}
                   />
                 ))}
             </div>
@@ -322,7 +394,7 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
             <EmptyState 
               icon={<FileEdit className="w-12 h-12 text-muted-foreground" />}
               title="暂无草稿"
-              description="您创建的草稿实验记录将显示在这里"
+              description={useGlobalView ? "系统中没有草稿实验记录" : "您创建的草稿实验记录将显示在这里"}
             />
           )}
         </TabsContent>
@@ -432,6 +504,9 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
                           </p>
 
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                            {useGlobalView && (
+                              <span>作者: {experiment.author.name}</span>
+                            )}
                             <span>审核人: {experiment.projects[0]?.ownerId ? '项目负责人' : '管理员'}</span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-4 h-4" />
@@ -478,7 +553,7 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
             <EmptyState 
               icon={<RefreshCw className="w-12 h-12 text-muted-foreground" />}
               title="暂无待修改记录"
-              description="被要求修改的实验记录将显示在这里"
+              description={useGlobalView ? "系统中没有被要求修改的实验记录" : "被要求修改的实验记录将显示在这里"}
             />
           )}
         </TabsContent>
@@ -508,6 +583,9 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
                           </p>
 
                           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                            {useGlobalView && (
+                              <span>作者: {experiment.author.name}</span>
+                            )}
                             <span className="flex items-center gap-1">
                               <Clock className="w-4 h-4" />
                               锁定于 {formatDate(experiment.reviewedAt || experiment.updatedAt)}
@@ -560,7 +638,7 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
             <EmptyState 
               icon={<Lock className="w-12 h-12 text-muted-foreground" />}
               title="暂无已锁定记录"
-              description="您已锁定的实验记录将显示在这里"
+              description={useGlobalView ? "系统中没有已锁定的实验记录" : "您已锁定的实验记录将显示在这里"}
             />
           )}
         </TabsContent>
@@ -707,6 +785,7 @@ function ExperimentCard({
   actionVariant,
   formatDate,
   getScoreColor,
+  showAuthor,
 }: {
   experiment: Experiment
   statusConfig: Record<ReviewStatus, { label: string; color: string; icon: React.ReactNode }>
@@ -716,6 +795,7 @@ function ExperimentCard({
   actionVariant: 'default' | 'outline' | 'destructive'
   formatDate: (date: string) => string
   getScoreColor: (score: number) => string
+  showAuthor?: boolean
 }) {
   return (
     <Card className="hover:border-primary/40 cursor-pointer transition-colors">
@@ -736,6 +816,9 @@ function ExperimentCard({
             </p>
 
             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              {showAuthor && (
+                <span>作者: {experiment.author.name}</span>
+              )}
               <span className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
                 更新于 {formatDate(experiment.updatedAt)}

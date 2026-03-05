@@ -14,7 +14,6 @@ import {
   X,
   LogOut,
   User,
-  ClipboardCheck,
   Users,
   HardDrive,
   ListTodo
@@ -60,9 +59,6 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
     { id: 'projects', label: '项目管理', icon: FolderKanban },
     { id: 'templates', label: '实验模板', icon: FileText },
   ]
-
-  // 审核管理菜单（仅管理员和项目负责人可见）
-  const showReviewMenu = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'ADMIN'
 
   // 用户管理菜单（仅超级管理员和管理员可见）
   const showUserMenu = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'ADMIN'
@@ -111,7 +107,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             </Button>
           ))}
 
-          {/* 我的任务入口 */}
+          {/* 我的任务入口 - 统一的任务管理中心（包含审核功能） */}
           <div className="my-2 border-t border-sidebar-border" />
           <Button
             variant={activeTab === 'my-tasks' ? 'secondary' : 'ghost'}
@@ -137,26 +133,6 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
               <div className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
             )}
           </Button>
-
-          {/* 审核管理入口 */}
-          {showReviewMenu && (
-            <>
-              <div className="my-2 border-t border-sidebar-border" />
-              <Button
-                key="review"
-                variant={activeTab === 'review' ? 'secondary' : 'ghost'}
-                className={cn(
-                  "w-full justify-start gap-3 text-sidebar-foreground",
-                  activeTab === 'review' && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-                  collapsed && "justify-center px-2"
-                )}
-                onClick={() => onTabChange('review')}
-              >
-                <ClipboardCheck className="w-5 h-5 flex-shrink-0" />
-                {!collapsed && <span>审核管理</span>}
-              </Button>
-            </>
-          )}
 
           {/* 用户管理入口 */}
           {showUserMenu && (

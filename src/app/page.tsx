@@ -12,7 +12,8 @@ import { ExperimentEditor } from '@/components/experiments/ExperimentEditor'
 import { ProjectDetail } from '@/components/projects/ProjectDetail'
 import { ExperimentDetail } from '@/components/experiments/ExperimentDetail'
 import { TemplateList } from '@/components/templates/TemplateList'
-import { ReviewList } from '@/components/experiments/ReviewList'
+// ReviewList 已废弃，功能已合并到 MyTasks 组件
+// import { ReviewList } from '@/components/experiments/ReviewList'
 import { UserManagement } from '@/components/users/UserManagement'
 import { FileManager } from '@/components/admin/FileManager'
 import { MyTasks } from '@/components/tasks/MyTasks'
@@ -173,10 +174,11 @@ function MainContent() {
             onEditExperiment={handleEditExperiment}
           />
         )
-      case 'review':
-        return (
-          <ReviewList onViewExperiment={handleViewExperiment} />
-        )
+      // 'review' 分支已移除，审核功能统一到 'my-tasks'
+      // case 'review':
+      //   return (
+      //     <ReviewList onViewExperiment={handleViewExperiment} />
+      //   )
       case 'users':
         return <UserManagement />
       case 'files':
