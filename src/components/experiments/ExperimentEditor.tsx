@@ -152,7 +152,9 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
     
     try {
       // 直接获取最新的附件列表
-      const response = await fetch(`/api/attachments?experimentId=${experimentId}`)
+      const response = await fetch(`/api/attachments?experimentId=${experimentId}`, {
+        credentials: 'include'
+      })
       if (response.ok) {
         const newAttachments = await response.json()
         setAttachments(newAttachments)
@@ -220,13 +222,13 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
     
     setIsSubmitting(true)
     try {
-      const success = await submitForReview(experimentId)
-      if (success) {
+      const result = await submitForReview(experimentId)
+      if (result.success) {
         setReviewStatus('PENDING_REVIEW')
         alert('已提交审核')
         onSave()
       } else {
-        alert('提交失败')
+        alert(result.error || '提交失败')
       }
     } catch (error) {
       console.error('Failed to submit for review:', error)
@@ -244,6 +246,7 @@ export function ExperimentEditor({ experimentId, onSave, onCancel }: ExperimentE
       const res = await fetch(`/api/experiments/${experimentId}/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ attachmentIds })
       })
       

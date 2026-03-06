@@ -170,8 +170,16 @@ async function extractPDFSummary(buffer: Buffer): Promise<PDFPreview> {
         pageCount = pdfData.Pages?.length || 1
         for (const page of pdfData.Pages || []) {
           for (const textItem of page.Texts || []) {
-            const decodedText = decodeURIComponent(textItem.R?.[0]?.T || '')
-            allText += decodedText + ' '
+            try {
+              const rawText = textItem.R?.[0]?.T || ''
+              // 安全解码，处理格式错误的 URI
+              const decodedText = decodeURIComponent(rawText.replace(/%(?![0-9A-Fa-f]{2})/g, '%25'))
+              allText += decodedText + ' '
+            } catch {
+              // 如果解码失败，尝试直接使用原始文本
+              const rawText = textItem.R?.[0]?.T || ''
+              allText += rawText + ' '
+            }
           }
           allText += '\n'
         }

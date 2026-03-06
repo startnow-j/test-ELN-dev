@@ -15,6 +15,7 @@ export async function POST(
     }
 
     const { id } = await params
+    console.log(`[Submit] User ${userId} submitting experiment ${id}`)
 
     // 获取实验记录
     const experiment = await db.experiment.findUnique({
@@ -36,20 +37,24 @@ export async function POST(
     })
 
     if (!experiment) {
+      console.log(`[Submit] Experiment ${id} not found`)
       return NextResponse.json({ error: '实验记录不存在' }, { status: 404 })
     }
 
     // 检查权限
     if (experiment.authorId !== userId) {
+      console.log(`[Submit] Permission denied: authorId=${experiment.authorId}, userId=${userId}`)
       return NextResponse.json({ error: '只能提交自己的实验记录' }, { status: 403 })
     }
 
     // 检查状态
+    console.log(`[Submit] Current reviewStatus: ${experiment.reviewStatus}`)
     if (experiment.reviewStatus !== 'DRAFT' && experiment.reviewStatus !== 'NEEDS_REVISION') {
       return NextResponse.json({ error: '当前状态不能提交审核' }, { status: 400 })
     }
 
     // 暂存实验不能提交审核
+    console.log(`[Submit] storageLocation: ${experiment.storageLocation}, experimentProjects: ${experiment.experimentProjects.length}`)
     if (experiment.storageLocation === 'draft' || experiment.experimentProjects.length === 0) {
       return NextResponse.json({ 
         error: '暂存实验不能提交审核，请先关联项目' 
@@ -66,10 +71,11 @@ export async function POST(
       attachments: experiment.attachments,
       experimentProjects: experiment.experimentProjects
     })
+    console.log(`[Submit] Calculated score: ${score}`)
 
     // 检查完整度 - 评分>=60 且 必须关联项目
     if (score < 60) {
-      return NextResponse.json({ error: '实验记录完整度不足（需≥60分），请补充更多信息' }, { status: 400 })
+      return NextResponse.json({ error: `实验记录完整度不足（当前${score}分，需≥60分），请补充更多信息` }, { status: 400 })
     }
 
     // 更新状态

@@ -1145,3 +1145,130 @@ antiword "upload/projects/.../iMSC分化SOP_1.doc"
 - ✅ MyTasks 视角切换功能完善
 - ✅ Lint 检查通过
 - ✅ 应用运行正常
+
+---
+
+## Task ID: 20 - AI服务管理功能规划
+
+**日期**: 2025-03-05
+
+**背景**: 用户了解当前AI服务权限管理机制后，要求将AI服务管理功能模块加入待办事项
+
+### Work Log:
+
+#### 1. AI服务权限管理说明
+向用户解释了当前系统的AI服务管理机制：
+- **使用权限**: 所有用户可对自己的实验使用AI提取
+- **配置管理**: 目前无管理界面，需修改环境变量/代码
+- **错误状态**: 系统记录每次AI提取的状态（PENDING/PROCESSING/COMPLETED/FAILED）
+
+#### 2. AI服务管理功能规划
+用户确认将AI服务管理功能加入待办事项，优先级为低（核心功能优化完成后开发）
+
+#### 3. 更新待办文档
+更新 `docs/PENDING_TASKS.md`：
+- 在待完成功能表中添加"AI服务管理"条目
+- 新增"第八章 AI服务管理功能规划"章节，包含：
+  - 功能概述
+  - 功能清单（5项功能）
+  - 数据库模型设计（AICallLog、AIServiceConfig）
+  - 前端页面设计
+  - API设计
+
+### 规划的功能清单
+
+| 功能 | 描述 | 权限 |
+|------|------|------|
+| AI服务状态页面 | 显示AI服务配置状态、连接状态 | SUPER_ADMIN |
+| API Token管理 | 配置/更新AI服务API Token | SUPER_ADMIN |
+| AI调用日志 | 记录每次AI调用的详情 | SUPER_ADMIN |
+| 使用量统计 | 统计AI调用次数和Token消耗 | SUPER_ADMIN |
+| 提取配额设置 | 限制用户/项目的AI提取次数 | SUPER_ADMIN |
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| docs/PENDING_TASKS.md | 更新 | 添加AI服务管理功能规划章节 |
+
+### Stage Summary:
+- ✅ 向用户解释了当前AI服务权限管理机制
+- ✅ AI服务管理功能已加入待办事项
+- ✅ 详细规划文档已编写
+- ✅ 预计开发版本：v3.4+
+
+---
+
+## Task ID: 21 - 进度保存与文档核对
+
+**日期**: 2025-03-05
+
+**背景**: 会话恢复后，根据工作规则进行进度保存和文档核对工作
+
+### Work Log:
+
+#### 1. 工作规则文档审核
+- 阅读 `docs/WORK_RULES.md` - 开发工作规则
+- 阅读 `docs/RULES_QUICK_REF.md` - 规则速查表
+- 确认定期回顾机制和检查清单
+
+#### 2. 模块文档核对
+核对范围：
+- `docs/SYSTEM_FEATURES_v3.3.md` - 系统功能规划
+- `docs/PROJECT_MODULE.md` - 项目管理模块
+- `docs/EXPERIMENT_MODULE.md` - 实验记录模块
+- `docs/MY_TASKS_MODULE.md` - 我的任务模块
+- `prisma/schema.prisma` - 数据库模型
+
+#### 3. 代码核对项目
+
+**提交审核API** (`src/app/api/experiments/[id]/submit/route.ts`):
+- ✅ 使用统一评分函数 `calculateCompletenessScore`
+- ✅ 评分阈值60分
+- ✅ 必须关联项目才能提交
+
+**评分计算** (`src/lib/completenessScore.ts`):
+- ✅ 满分100分
+- ✅ 附件评分：基础15分 + 每个附件5分（最多15分额外）
+- ✅ AI提取评分：试剂/仪器/参数/步骤各2.5分
+
+**项目API** (`src/app/api/projects/route.ts`):
+- ✅ 视角切换使用 viewMode 参数
+- ✅ 项目关系标记细分（CREATED/LEADING/JOINED/GLOBAL）
+- ✅ 成员数量计算正确（memberCount）
+
+**数据库模型** (`prisma/schema.prisma`):
+- ✅ 包含所有最新字段
+- ✅ 枚举定义完整
+
+#### 4. 系统状态检查
+- ✅ dev.log 显示系统运行正常
+- ✅ lint 检查通过
+
+#### 5. 文档一致性确认
+- ✅ PROJECT_MODULE.md 与代码一致
+- ✅ EXPERIMENT_MODULE.md 与代码一致
+- ✅ MY_TASKS_MODULE.md 与代码一致
+- ✅ SYSTEM_FEATURES_v3.3.md 版本记录完整
+
+### Stage Summary:
+- ✅ 工作规则文档已审核
+- ✅ 各模块文档与代码功能核对完成
+- ✅ 系统运行状态正常
+- ✅ Lint 检查通过
+- ⏳ 待完成：Git 提交和云端保存（需用户提供 PAT）
+
+---
+
+## 当前版本状态
+
+**当前版本**: v3.3.5
+
+**最新功能**:
+- 视角切换功能修复（API参数统一、独立数据获取）
+- AI服务管理功能规划（待开发）
+- 提交审核功能修复（错误信息增强）
+
+**待开发功能**:
+- 锁定PDF生成
+- AI项目汇总
+- AI服务管理模块

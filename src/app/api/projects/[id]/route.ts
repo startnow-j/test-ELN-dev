@@ -6,6 +6,110 @@ import { AuditAction } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 
+// 获取单个项目详情
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const userId = await getUserIdFromToken(request)
+    if (!userId) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 })
+    }
+
+    const { id } = await params
+
+    const project = await db.project.findUnique({
+      where: { id },
+      include: {
+        owner: {
+          select: { id: true, name: true, email: true, role: true, avatar: true }
+        },
+        members: {
+          select: { id: true, name: true, email: true, role: true, avatar: true }
+        },
+        projectMembers: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, role: true, avatar: true }
+            }
+          }
+        },
+        experimentProjects: {
+          include: {
+            experiment: {
+              include: {
+                author: {
+                  select: { id: true, name: true, email: true, role: true, avatar: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!project) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 })
+    }
+
+    // 计算成员数量
+    const memberIds = new Set(project.projectMembers.map(pm => pm.userId))
+    memberIds.add(project.ownerId)
+    const memberCount = memberIds.size
+
+    // 计算项目关系
+    let relation: 'CREATED' | 'LEADING' | 'JOINED' | 'GLOBAL' = 'GLOBAL'
+    const adminCheck = await isAdmin(userId)
+    
+    if (project.ownerId === userId) {
+      relation = 'CREATED'
+    } else {
+      const memberRecord = project.projectMembers.find(pm => pm.userId === userId)
+      if (memberRecord) {
+        relation = memberRecord.role === 'PROJECT_LEAD' ? 'LEADING' : 'JOINED'
+      } else if (!adminCheck) {
+        relation = 'GLOBAL'
+      }
+    }
+
+    return NextResponse.json({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      status: project.status,
+      startDate: project.startDate?.toISOString() || null,
+      endDate: project.endDate?.toISOString() || null,
+      expectedEndDate: project.expectedEndDate?.toISOString() || null,
+      actualEndDate: project.actualEndDate?.toISOString() || null,
+      completedAt: project.completedAt?.toISOString() || null,
+      archivedAt: project.archivedAt?.toISOString() || null,
+      primaryLeader: project.primaryLeader,
+      ownerId: project.ownerId,
+      owner: project.owner,
+      members: project.members,
+      memberCount,
+      createdAt: project.createdAt.toISOString(),
+      experiments: project.experimentProjects.map(ep => ({
+        id: ep.experiment.id,
+        title: ep.experiment.title,
+        summary: ep.experiment.summary,
+        conclusion: ep.experiment.conclusion,
+        reviewStatus: ep.experiment.reviewStatus,
+        completenessScore: ep.experiment.completenessScore,
+        tags: ep.experiment.tags,
+        author: ep.experiment.author,
+        createdAt: ep.experiment.createdAt.toISOString(),
+        updatedAt: ep.experiment.updatedAt.toISOString()
+      })),
+      _relation: relation
+    })
+  } catch (error) {
+    console.error('Get project error:', error)
+    return NextResponse.json({ error: '获取项目详情失败' }, { status: 500 })
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

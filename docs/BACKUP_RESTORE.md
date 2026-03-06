@@ -11,7 +11,7 @@
 | 仓库类型 | 公开仓库 (Public) |
 | 仓库 URL | https://github.com/startnow-j/test-ELN-dev.git |
 | 克隆命令 | `git clone https://github.com/startnow-j/test-ELN-dev.git` |
-| 当前版本标签 | v3.3 |
+| 当前版本标签 | v3.3.5 |
 
 ### 认证说明
 
@@ -47,6 +47,7 @@
 
 | 标签 | 提交 | 日期 | 说明 |
 |------|------|------|------|
+| v3.3.5 | - | 2025-03-05 | 视角切换功能修复、提交审核增强 |
 | v3.3 | 4748df8 | 2025-02-28 | BioLab ELN v3.3 - 项目管理模块完整功能 |
 
 ### 创建新版本标签
@@ -385,10 +386,135 @@ upload/
 
 ---
 
+---
+
+## 📊 版本历史记录
+
+> 本章节记录每次云端保存时的版本信息，便于追溯和恢复。
+
+### v3.3.5 (2025-03-05)
+
+**主要功能**:
+- 视角切换功能修复（API参数统一为viewMode）
+- 项目关系标记细分（CREATED/LEADING/JOINED/GLOBAL）
+- 提交审核错误信息增强
+- AI服务管理功能规划
+
+**修改文件**:
+- `src/components/experiments/ExperimentList.tsx` - 独立数据获取
+- `src/components/tasks/MyTasks.tsx` - 视角切换修复
+- `src/app/api/experiments/route.ts` - viewMode参数统一
+- `src/app/api/projects/route.ts` - 项目关系标记
+
+**文档更新**:
+- `docs/PENDING_TASKS.md` - AI服务管理功能规划
+- `worklog.md` - Task ID 19-21 记录
+
+---
+
+### v3.3.4 (2025-03-05)
+
+**主要功能**:
+- 允许所有用户创建项目（移除角色限制）
+- 全局视角功能完善
+
+**修改文件**:
+- `src/app/api/projects/route.ts` - 移除创建项目角色限制
+- `src/components/projects/ProjectList.tsx` - 移除按钮权限判断
+
+---
+
+### v3.3.3 (2025-03-05)
+
+**主要功能**:
+- 管理员默认使用全局视角
+- 修复superadmin和admin全局视角数据不一致问题
+
+**修改文件**:
+- `src/app/api/projects/route.ts` - 默认视角逻辑调整
+- `src/components/projects/ProjectList.tsx` - 管理员默认全局视角
+
+---
+
+### v3.3.2 (2025-03-05)
+
+**主要功能**:
+- 审核管理功能合并到我的任务模块
+- 移除侧边栏"审核管理"入口
+
+**修改文件**:
+- `src/components/layout/Sidebar.tsx` - 移除审核管理入口
+- `src/app/page.tsx` - 移除 ReviewList 引用
+- `src/components/experiments/ReviewList.tsx` - 标记废弃
+- `docs/REVIEW_MODULE.md` - 添加合并通知
+- `docs/MY_TASKS_MODULE.md` - 更新版本历史
+
+---
+
+### v3.3.1 (2025-03-02)
+
+**主要功能**:
+- 项目主负责人字段（手写填入）
+- 全局视角切换（简化为2种视角）
+- 成员数计算优化（memberCount字段）
+
+**数据库变更**:
+- `Project` 模型新增 `primaryLeader` 字段
+- `Project` 模型新增 `expectedEndDate`、`actualEndDate` 字段
+- `Project` 模型新增 `completedAt`、`archivedAt` 字段
+
+**修改文件**:
+- `prisma/schema.prisma` - 新增字段
+- `src/app/api/projects/route.ts` - 视角切换、memberCount
+- `src/components/projects/ProjectList.tsx` - 视角切换UI
+- `src/components/projects/ProjectDetail.tsx` - 主负责人编辑
+- `src/components/projects/CreateProjectDialog.tsx` - 主负责人输入
+
+---
+
+### v3.3 (2025-03-01)
+
+**主要功能**:
+- AI评分系统（满分100分）
+- AI提取支持.doc文件（使用antiword）
+- 项目归档自动锁定实验
+- 项目成员角色权限细化
+- 项目文档管理
+
+**数据库变更**:
+- 新增 `ProjectDocument` 模型
+- 新增 `ProjectDocumentType` 枚举
+
+**修改文件**:
+- `src/lib/completenessScore.ts` - 评分计算函数
+- `src/lib/fileParser.ts` - .doc文件支持
+- `src/app/api/experiments/[id]/submit/route.ts` - 提交审核
+- `src/app/api/projects/[id]/status/route.ts` - 状态变更API
+
+---
+
+### v3.0 (2025-02-27)
+
+**主要功能**:
+- AI智能提取（试剂/仪器/参数/步骤）
+- 审核流程（提交/通过/要求修改/锁定）
+- 附件管理和预览
+- 完整度评分系统
+
+**数据库变更**:
+- `Experiment` 模型新增 `summary`、`conclusion`、`extractedInfo`
+- `Experiment` 模型新增 `reviewStatus`、`completenessScore`
+- 新增 `ReviewStatus`、`ExtractionStatus` 枚举
+- 新增 `ReviewFeedback`、`ReviewRequest` 模型
+
+---
+
 ## 📅 维护记录
 
 | 日期 | 操作 | 说明 |
 |------|------|------|
+| 2025-03-05 | 版本更新 | 更新至 v3.3.5，添加版本历史记录章节 |
+| 2025-03-05 | 文档规范 | 新增版本历史记录维护要求 |
 | 2025-02-28 | 初始化 | 创建备份恢复文档 |
 | 2025-02-28 | 版本标签 | 创建 v3.3 标签 |
 | 2025-02-28 | 分支保护 | 启用 master 分支保护规则 |
@@ -396,4 +522,4 @@ upload/
 
 ---
 
-*最后更新：2025-02-28*
+*最后更新：2025-03-05*

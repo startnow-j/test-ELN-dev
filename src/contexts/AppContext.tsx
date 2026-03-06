@@ -185,7 +185,7 @@ interface AppContextType extends AppState {
   triggerExtraction: (experimentId: string) => Promise<boolean>
   updateExtractedInfo: (experimentId: string, info: ExtractedInfo) => Promise<boolean>
   // 审核
-  submitForReview: (experimentId: string) => Promise<boolean>
+  submitForReview: (experimentId: string) => Promise<{ success: boolean; error?: string }>
   reviewExperiment: (experimentId: string, action: 'APPROVE' | 'REQUEST_REVISION', feedback?: string) => Promise<boolean>
   // 模板操作
   createTemplate: (data: Partial<Template>) => Promise<Template | null>
@@ -436,7 +436,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   // 审核
-  const submitForReview = async (experimentId: string): Promise<boolean> => {
+  const submitForReview = async (experimentId: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await fetch(`/api/experiments/${experimentId}/submit`, {
         method: 'POST',
@@ -447,11 +447,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...prev,
           experiments: prev.experiments.map(e => e.id === experimentId ? updated : e)
         }))
-        return true
+        return { success: true }
+      } else {
+        const errorData = await res.json().catch(() => ({ error: '提交失败' }))
+        return { success: false, error: errorData.error || '提交失败' }
       }
-      return false
-    } catch {
-      return false
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '提交失败' }
     }
   }
 

@@ -1,6 +1,7 @@
 # BioLab ELN 待办事项
 
 > 最后更新: 2025-03-05 (v3.3.5)
+> 会话恢复时间: 2025-03-05
 > 下次会话继续开发参考
 
 ---
@@ -42,6 +43,7 @@
 | 锁定PDF | 审核通过后生成PDF | 中 | 待开发 |
 | AI项目汇总 | 多选PDF分析 | 低 | 待开发 |
 | 项目管理 | 分页/虚拟滚动 | 低 | 待优化 |
+| **AI服务管理** | **AI服务状态页面/Token管理/调用日志/使用量统计** | **低** | **待规划** |
 
 ---
 
@@ -237,6 +239,78 @@
 3. 安装依赖并准备好开发环境
 4. 阅读 /home/z/my-project/docs/PENDING_TASKS.md 了解待办事项
 ```
+
+---
+
+## 八、AI服务管理功能规划（待开发）
+
+> **优先级**: 低（核心功能优化完成后开发）
+> **规划日期**: 2025-03-05
+> **预计版本**: v3.4+
+
+### 8.1 功能概述
+
+当前系统AI服务（z-ai-web-dev-sdk）缺乏管理功能，需要开发专门的管理模块。
+
+### 8.2 功能清单
+
+| 功能 | 描述 | 权限 | 状态 |
+|------|------|------|------|
+| **AI服务状态页面** | 显示当前AI服务配置状态、连接状态 | SUPER_ADMIN | 待开发 |
+| **API Token管理** | 配置/更新AI服务API Token | SUPER_ADMIN | 待开发 |
+| **AI调用日志** | 记录每次AI调用的详情（用户、时间、耗时、状态） | SUPER_ADMIN | 待开发 |
+| **使用量统计** | 统计每个用户/项目的AI调用次数和Token消耗 | SUPER_ADMIN | 待开发 |
+| **提取配额设置** | 限制用户/项目的AI提取次数 | SUPER_ADMIN | 待开发 |
+
+### 8.3 数据库模型设计（待定）
+
+```prisma
+// AI调用日志
+model AICallLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  experimentId String?
+  action      String   // EXTRACT, SUMMARIZE, etc.
+  inputTokens Int?
+  outputTokens Int?
+  duration    Int      // 毫秒
+  status      String   // SUCCESS, FAILED
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@map("ai_call_logs")
+}
+
+// AI服务配置
+model AIServiceConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique  // API_TOKEN, MODEL_NAME, etc.
+  value       String
+  updatedAt   DateTime @updatedAt
+  updatedBy   String
+
+  @@map("ai_service_configs")
+}
+```
+
+### 8.4 前端页面设计（待定）
+
+- 入口：侧边栏管理菜单 → "AI服务管理"（仅SUPER_ADMIN可见）
+- 页面布局：
+  - 状态卡片：显示AI服务连接状态
+  - Token配置：输入框 + 保存按钮
+  - 统计图表：调用次数趋势图
+  - 调用日志表格：分页显示历史记录
+
+### 8.5 API设计（待定）
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/admin/ai/status` | GET | 获取AI服务状态 |
+| `/api/admin/ai/config` | GET/PUT | 获取/更新AI配置 |
+| `/api/admin/ai/logs` | GET | 获取AI调用日志 |
+| `/api/admin/ai/stats` | GET | 获取使用量统计 |
 
 ---
 

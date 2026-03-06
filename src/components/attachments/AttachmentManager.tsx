@@ -112,7 +112,8 @@ export function AttachmentManager({
 
       const response = await fetch('/api/attachments', {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'include'
       })
 
       setUploadProgress(100)
