@@ -4,7 +4,7 @@ import { getUserIdFromToken } from '@/lib/auth'
 import { AuditAction } from '@prisma/client'
 
 // 项目关系类型
-type ProjectRelation = 'CREATED' | 'JOINED' | 'GLOBAL'
+type ProjectRelation = 'CREATED' | 'LEADING' | 'JOINED' | 'GLOBAL'
 
 // 获取项目列表
 export async function GET(request: NextRequest) {
@@ -58,11 +58,18 @@ export async function GET(request: NextRequest) {
 
       if (project.ownerId === userId) {
         relation = 'CREATED'
-      } else if (project.projectMembers.some(pm => pm.userId === userId)) {
-        relation = 'JOINED'
-      } else if (!isAdmin) {
-        // 非管理员且不属于项目，不应该看到
-        relation = 'GLOBAL'
+      } else {
+        // 检查用户在项目中的角色
+        const memberRecord = project.projectMembers.find(pm => pm.userId === userId)
+        if (memberRecord) {
+          if (memberRecord.role === 'PROJECT_LEAD') {
+            relation = 'LEADING'  // 项目负责人
+          } else {
+            relation = 'JOINED'   // 普通成员或观察者
+          }
+        } else if (!isAdmin) {
+          relation = 'GLOBAL'
+        }
       }
 
       // 计算成员数量：projectMembers 表中的成员 + 创建者（如果不在表中）

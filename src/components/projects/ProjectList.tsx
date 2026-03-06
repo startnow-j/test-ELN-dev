@@ -54,6 +54,7 @@ import {
   User,
   Star,
   UserPlus,
+  Shield,
 } from 'lucide-react'
 import { useApp, Project } from '@/contexts/AppContext'
 
@@ -68,7 +69,7 @@ const viewModeConfig: Record<ViewMode, { label: string; description: string; ico
 
 // 带关系标记的项目类型
 interface ProjectWithRelation extends Project {
-  _relation?: 'CREATED' | 'JOINED' | 'GLOBAL'
+  _relation?: 'CREATED' | 'LEADING' | 'JOINED' | 'GLOBAL'
 }
 
 interface ProjectListProps {
@@ -202,13 +203,21 @@ export function ProjectList({ onCreateProject, onViewProject }: ProjectListProps
     return <Badge className={config.className}>{config.label}</Badge>
   }
 
-  const getRelationBadge = (relation?: 'CREATED' | 'JOINED' | 'GLOBAL') => {
+  const getRelationBadge = (relation?: 'CREATED' | 'LEADING' | 'JOINED' | 'GLOBAL') => {
     if (!relation || relation === 'GLOBAL') return null
     if (relation === 'CREATED') {
       return (
         <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary">
           <Star className="w-3 h-3" />
           我创建
+        </Badge>
+      )
+    }
+    if (relation === 'LEADING') {
+      return (
+        <Badge variant="outline" className="text-xs gap-1 border-amber-400/50 text-amber-600">
+          <Shield className="w-3 h-3" />
+          我负责
         </Badge>
       )
     }
