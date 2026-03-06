@@ -94,11 +94,11 @@ export function ExperimentDetail({ experiment, onEdit, onBack }: ExperimentDetai
   const handleSubmitReview = async () => {
     setIsSubmitting(true)
     try {
-      const result = await submitForReview(experiment.id)
-      if (result.success) {
+      const success = await submitForReview(experiment.id)
+      if (success) {
         alert('已提交审核')
       } else {
-        alert(result.error || '提交失败')
+        alert('提交失败')
       }
     } finally {
       setIsSubmitting(false)

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { AppProvider, useApp, Project, Experiment } from '@/contexts/AppContext'
+import { useState } from 'react'
+import { AppProvider, useApp } from '@/contexts/AppContext'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { LoginPage } from '@/components/auth/LoginPage'
@@ -19,7 +19,6 @@ import { FileManager } from '@/components/admin/FileManager'
 import { MyTasks } from '@/components/tasks/MyTasks'
 import { CreateProjectDialog } from '@/components/projects/CreateProjectDialog'
 import { Toaster } from '@/components/ui/toaster'
-import { Loader2 } from 'lucide-react'
 
 function MainContent() {
   const { currentUser, isLoading, projects, experiments } = useApp()
@@ -29,95 +28,8 @@ function MainContent() {
   const [viewingProjectId, setViewingProjectId] = useState<string | null>(null)
   const [isCreatingExperiment, setIsCreatingExperiment] = useState(false)
   const [isCreatingProject, setIsCreatingProject] = useState(false)
-  
-  // 用于存储从 API 获取的项目详情（当项目不在 AppContext 中时）
-  const [fetchedProject, setFetchedProject] = useState<Project | null>(null)
-  const [isLoadingProject, setIsLoadingProject] = useState(false)
-  const [projectExperiments, setProjectExperiments] = useState<Experiment[]>([])
 
-  // 当 viewingProjectId 变化时，获取项目详情
-  useEffect(() => {
-    if (viewingProjectId) {
-      // 先尝试从 AppContext 中查找
-      const project = projects.find(p => p.id === viewingProjectId)
-      if (project) {
-        // 项目在 AppContext 中，使用现有数据
-        setFetchedProject(null)
-        setProjectExperiments(experiments.filter(e => 
-          e.projects.some(p => p.id === viewingProjectId)
-        ))
-      } else {
-        // 项目不在 AppContext 中，从 API 获取
-        const fetchProject = async () => {
-          setIsLoadingProject(true)
-          try {
-            const res = await fetch(`/api/projects/${viewingProjectId}`)
-            if (res.ok) {
-              const data = await res.json()
-              // 转换 API 响应为 Project 类型
-              const projectData: Project = {
-                id: data.id,
-                name: data.name,
-                description: data.description,
-                status: data.status,
-                startDate: data.startDate,
-                endDate: data.endDate,
-                expectedEndDate: data.expectedEndDate,
-                actualEndDate: data.actualEndDate,
-                completedAt: data.completedAt,
-                archivedAt: data.archivedAt,
-                primaryLeader: data.primaryLeader,
-                ownerId: data.ownerId,
-                owner: data.owner,
-                members: data.members || [],
-                memberCount: data.memberCount,
-                createdAt: data.createdAt,
-                _relation: data._relation
-              }
-              setFetchedProject(projectData)
-              
-              // 转换实验数据
-              const expData: Experiment[] = (data.experiments || []).map((exp: any) => ({
-                id: exp.id,
-                title: exp.title,
-                summary: exp.summary,
-                conclusion: exp.conclusion,
-                extractedInfo: null,
-                extractionStatus: 'PENDING',
-                extractionError: null,
-                reviewStatus: exp.reviewStatus,
-                completenessScore: exp.completenessScore || 0,
-                tags: exp.tags,
-                authorId: exp.author?.id || '',
-                author: exp.author,
-                projects: [],
-                attachments: [],
-                createdAt: exp.createdAt,
-                updatedAt: exp.updatedAt,
-                submittedAt: null,
-                reviewedAt: null
-              }))
-              setProjectExperiments(expData)
-            } else {
-              console.error('Failed to fetch project:', await res.text())
-              setFetchedProject(null)
-            }
-          } catch (error) {
-            console.error('Fetch project error:', error)
-            setFetchedProject(null)
-          } finally {
-            setIsLoadingProject(false)
-          }
-        }
-        fetchProject()
-      }
-    } else {
-      // 清除获取的项目数据
-      setFetchedProject(null)
-      setProjectExperiments([])
-    }
-  }, [viewingProjectId, projects, experiments])
-
+  // 加载中状态
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -171,8 +83,6 @@ function MainContent() {
     setViewingExperimentId(null)
     setViewingProjectId(null)
     setIsCreatingExperiment(false)
-    setFetchedProject(null)
-    setProjectExperiments([])
   }
 
   // 切换Tab时清除详情状态（允许从详情页直接导航到其他模块）
@@ -216,29 +126,14 @@ function MainContent() {
 
     // 项目详情
     if (viewingProjectId) {
-      // 显示加载状态
-      if (isLoadingProject) {
-        return (
-          <div className="min-h-[400px] flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground">加载项目详情...</p>
-            </div>
-          </div>
-        )
-      }
-      
-      // 优先使用从 API 获取的项目，否则从 AppContext 中查找
-      const project = fetchedProject || projects.find(p => p.id === viewingProjectId)
+      const project = projects.find(p => p.id === viewingProjectId)
       if (project) {
-        // 如果有获取的实验数据，使用它们；否则从 AppContext 过滤
-        const projectExps = projectExperiments.length > 0 
-          ? projectExperiments 
-          : experiments.filter(e => e.projects.some(p => p.id === viewingProjectId))
         return (
           <ProjectDetail
             project={project}
-            experiments={projectExps}
+            experiments={experiments.filter(e => 
+              e.projects.some(p => p.id === viewingProjectId)
+            )}
             onBack={handleBack}
             onViewExperiment={handleViewExperiment}
           />

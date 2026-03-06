@@ -255,23 +255,16 @@ export async function POST(
       console.error('Extraction error:', extractError)
       
       // 更新状态为失败
-      const errorMessage = extractError instanceof Error ? extractError.message : '提取失败'
-      
-      // 检查是否是token错误
-      const isTokenError = errorMessage.includes('invalid X-Token') || errorMessage.includes('401')
-      
       await db.experiment.update({
         where: { id },
         data: {
           extractionStatus: 'FAILED',
-          extractionError: isTokenError ? 'AI服务配置错误：API Token无效或已过期，请联系系统管理员' : errorMessage
+          extractionError: extractError instanceof Error ? extractError.message : '提取失败'
         }
       })
 
       return NextResponse.json({ 
-        error: isTokenError 
-          ? 'AI服务配置错误：API Token无效或已过期，请联系系统管理员更新配置' 
-          : errorMessage
+        error: extractError instanceof Error ? extractError.message : 'AI提取失败' 
       }, { status: 500 })
     }
 
