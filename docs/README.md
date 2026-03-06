@@ -1,7 +1,7 @@
 # BioLab ELN 文档目录
 
-> **当前版本**: v3.3
-> **最后整理**: 2025-02-28
+> **当前版本**: v3.3.5  
+> **最后整理**: 2025-03-05
 
 ---
 
@@ -22,9 +22,11 @@
 | [USER_MANAGEMENT_MODULE.md](./USER_MANAGEMENT_MODULE.md) | 用户管理模块 | 角色体系、权限矩阵、API端点 |
 | [PROJECT_MODULE.md](./PROJECT_MODULE.md) | 项目管理模块 | 数据模型、状态流转、成员管理 |
 | [EXPERIMENT_MODULE.md](./EXPERIMENT_MODULE.md) | 实验记录模块 | 创建编辑、审核流程、完整度评分 |
-| [REVIEW_MODULE.md](./REVIEW_MODULE.md) | 审核管理模块 | 审核状态、权限控制、审计日志 |
+| [REVIEW_MODULE.md](./REVIEW_MODULE.md) | 审核管理模块 | ⚠️ 已合并到我的任务（保留参考） |
 | [FILE_MANAGEMENT_MODULE.md](./FILE_MANAGEMENT_MODULE.md) | 文件管理模块 | 存储结构、权限控制、孤立文件处理 |
 | [MY_TASKS_MODULE.md](./MY_TASKS_MODULE.md) | 我的任务模块 | 任务分类、界面设计、操作功能 |
+
+> ⚠️ **重要**: 审核管理功能已合并到"我的任务"模块！
 
 ### 🔧 运维文档
 
@@ -32,7 +34,7 @@
 |------|------|------|
 | [WORK_RULES.md](./WORK_RULES.md) | 开发工作规则（详细版） | 会话启动、影响评估、进度保存等规则 |
 | [RULES_QUICK_REF.md](./RULES_QUICK_REF.md) | 核心规则速查表（极简版） | 快速回顾，关键操作前查阅 |
-| [BACKUP_RESTORE.md](./BACKUP_RESTORE.md) | 备份恢复指南 | GitHub推送、版本标签、历史恢复 |
+| [BACKUP_RESTORE.md](./BACKUP_RESTORE.md) | 备份恢复指南 | GitHub推送、版本标签、版本历史 |
 | [TEST_ACCOUNTS.md](./TEST_ACCOUNTS.md) | 测试账户汇总 | 各角色测试账号信息 |
 
 ### 📝 开发日志
@@ -48,8 +50,8 @@
 ### 新会话开始时
 1. **阅读 [WORK_RULES.md](./WORK_RULES.md)** - 了解开发工作规则
 2. 阅读 [PENDING_TASKS.md](./PENDING_TASKS.md) 了解当前进度
-3. 阅读 [DEV_PLAN_v3.3.md](./DEV_PLAN_v3.3.md) 了解开发计划
-4. 阅读 [BACKUP_RESTORE.md](./BACKUP_RESTORE.md) 了解如何恢复项目
+3. 阅读 [BACKUP_RESTORE.md](./BACKUP_RESTORE.md) 了解版本历史
+4. 阅读 [RULES_QUICK_REF.md](./RULES_QUICK_REF.md) 快速回顾规则
 
 ### 关键操作前（快速回顾）
 - 阅读 [RULES_QUICK_REF.md](./RULES_QUICK_REF.md) - 核心规则速查
@@ -58,9 +60,8 @@
 - 用户相关 → [USER_MANAGEMENT_MODULE.md](./USER_MANAGEMENT_MODULE.md)
 - 项目相关 → [PROJECT_MODULE.md](./PROJECT_MODULE.md)
 - 实验相关 → [EXPERIMENT_MODULE.md](./EXPERIMENT_MODULE.md)
-- 审核相关 → [REVIEW_MODULE.md](./REVIEW_MODULE.md)
+- 任务/审核相关 → [MY_TASKS_MODULE.md](./MY_TASKS_MODULE.md)
 - 文件相关 → [FILE_MANAGEMENT_MODULE.md](./FILE_MANAGEMENT_MODULE.md)
-- 任务相关 → [MY_TASKS_MODULE.md](./MY_TASKS_MODULE.md)
 
 ### 测试时
 - 测试账号 → [TEST_ACCOUNTS.md](./TEST_ACCOUNTS.md)
@@ -79,6 +80,7 @@
 5. **完成功能时**：更新 PENDING_TASKS 中的状态
 6. **新会话结束前**：更新 worklog.md 记录开发过程
 7. **工作规则优化**：发现更优工作方式时更新 WORK_RULES.md
+8. **云端保存前**：必须更新 BACKUP_RESTORE.md 版本历史
 
 ---
 
@@ -91,4 +93,15 @@
 
 ---
 
-*文档整理日期: 2025-02-28*
+## 版本历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| v3.3.5 | 2025-03-05 | 视角切换修复、审核合并到我的任务 |
+| v3.3.1 | 2025-03-02 | 项目主负责人、全局视角 |
+| v3.3 | 2025-03-01 | 超级管理员、暂存实验 |
+| v3.0 | 2025-02-27 | AI提取、审核流程 |
+
+---
+
+*文档整理日期: 2025-03-05*

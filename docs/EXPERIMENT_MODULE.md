@@ -1,7 +1,7 @@
 # BioLab ELN 实验记录模块说明文档
 
-> **版本**: v3.3  
-> **最后更新**: 2025-03-02  
+> **版本**: v3.3.5  
+> **最后更新**: 2025-03-05  
 > **维护者**: 开发团队
 
 ---
@@ -152,12 +152,12 @@ model Attachment {
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|-------|------|
-| `globalView` | boolean | false | 管理员全局视角 |
+| `viewMode` | string | default | `default` / `global`（v3.3.5更新） |
 | `draftsOnly` | boolean | false | 仅获取暂存实验 |
 | `projectRelated` | boolean | false | 仅获取项目实验 |
 
 **权限逻辑**:
-- 管理员使用 `globalView=true` 可查看所有实验
+- 管理员使用 `viewMode=global` 可查看所有实验
 - 普通用户：参与项目内的实验 + 自己的暂存实验
 
 **响应示例**:
@@ -243,7 +243,7 @@ model Attachment {
 | 权限 | 仅作者可提交 |
 | 状态 | `DRAFT` 或 `NEEDS_REVISION` |
 | 存储位置 | 必须关联项目 |
-| 完整度 | ≥30分 |
+| 完整度 | ≥60分（v3.3.5更新） |
 
 **状态变更**: `DRAFT/NEEDS_REVISION` → `PENDING_REVIEW`
 
@@ -455,6 +455,15 @@ function getUniqueFilename(dir: string, filename: string): string {
 
 ## 9. 变更记录
 
+### v3.3.5 (2025-03-05)
+
+**功能修复**:
+- [x] 视角切换API参数统一为 `viewMode`
+- [x] 完整度评分提交阈值更新为60分
+
+**API变更**:
+- `GET /api/experiments` 参数 `globalView` 改为 `viewMode`
+
 ### v3.3 (2025-03-02)
 
 **功能修复**:
@@ -525,7 +534,7 @@ prisma/
 | HTTP状态码 | 错误信息 | 原因 |
 |-----------|---------|------|
 | 400 | 标题不能为空 | 创建实验未提供标题 |
-| 400 | 完整度不足 | 完整度评分低于30分 |
+| 400 | 完整度不足 | 完整度评分低于60分（v3.3.5更新） |
 | 401 | 未登录 | Token无效或过期 |
 | 403 | 无权限编辑此实验 | 非作者且非管理员 |
 | 403 | 实验已锁定，无法编辑 | LOCKED状态 |
