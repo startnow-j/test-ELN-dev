@@ -23,16 +23,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
 
-    // 检查是否请求全局视角
+    // 检查视角参数 - 统一使用 viewMode 参数
     const { searchParams } = new URL(request.url)
-    const globalView = searchParams.get('globalView') === 'true'
+    const viewMode = searchParams.get('viewMode') || 'default'
+    
+    // 兼容旧的 globalView 参数
+    const globalViewLegacy = searchParams.get('globalView') === 'true'
     const draftsOnly = searchParams.get('draftsOnly') === 'true'
     const projectRelated = searchParams.get('projectRelated') === 'true'
 
-    // 管理员默认使用全局视角（无需传参）
-    // 只有明确传 globalView=false 时才使用普通视角
+    // 管理员判断
     const isAdminUser = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
-    const useGlobalView = isAdminUser && (globalView || !searchParams.has('globalView'))
+    
+    // 决定是否使用全局视角
+    // viewMode='global' 或 兼容旧参数 globalView=true 或 管理员默认无参数时使用全局视角
+    const useGlobalView = isAdminUser && (
+      viewMode === 'global' || 
+      globalViewLegacy || 
+      (!searchParams.has('viewMode') && !searchParams.has('globalView') && !searchParams.has('draftsOnly') && !searchParams.has('projectRelated'))
+    )
 
     let experiments
 

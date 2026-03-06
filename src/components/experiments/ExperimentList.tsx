@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -38,7 +38,8 @@ import {
   RefreshCw,
   Globe,
   User,
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from 'lucide-react'
 import { useApp, ReviewStatus, Experiment } from '@/contexts/AppContext'
 
@@ -95,14 +96,17 @@ function needsProjectReminder(experiment: Experiment): boolean {
 }
 
 export function ExperimentList({ onCreateExperiment, onViewExperiment }: ExperimentListProps) {
-  const { experiments, currentUser, refreshData } = useApp()
+  const { currentUser } = useApp()
+  const [experiments, setExperiments] = useState<Experiment[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<'projects' | 'drafts'>('projects')
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   
-  // 视角状态 - 初始值使用函数计算
+  // 是否是管理员
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
+  
+  // 视角状态 - 管理员默认全局视角，普通用户普通视角
   const [viewMode, setViewMode] = useState<ViewMode>(() => 
     isAdmin ? 'global' : 'default'
   )
@@ -110,26 +114,42 @@ export function ExperimentList({ onCreateExperiment, onViewExperiment }: Experim
   // 是否使用全局视角
   const useGlobalView = viewMode === 'global' && isAdmin
 
-  // 刷新数据
-  const handleRefresh = async () => {
+  // 加载实验数据
+  const loadExperiments = useCallback(async (mode: ViewMode) => {
     setIsLoading(true)
-    await refreshData()
-    setIsLoading(false)
-  }
+    try {
+      const params = new URLSearchParams()
+      // 统一使用 viewMode 参数
+      params.set('viewMode', mode)
+      
+      const res = await fetch(`/api/experiments?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setExperiments(data)
+      }
+    } catch (error) {
+      console.error('Load experiments error:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // 初始加载和视角切换时重新加载
+  useEffect(() => {
+    if (currentUser) {
+      loadExperiments(viewMode)
+    }
+  }, [viewMode, currentUser, loadExperiments])
 
   // 分离项目相关和暂存实验
-  // 全局视角下显示所有实验
-  const projectExperiments = useGlobalView
-    ? experiments.filter(exp => exp.storageLocation !== 'draft' && exp.projects.length > 0)
-    : experiments.filter(exp => 
-        exp.storageLocation !== 'draft' && exp.projects.length > 0
-      )
+  // 根据视角显示不同的数据
+  const projectExperiments = experiments.filter(exp => 
+    exp.storageLocation !== 'draft' && exp.projects.length > 0
+  )
   
-  const draftExperiments = useGlobalView
-    ? experiments.filter(exp => exp.storageLocation === 'draft' || (!exp.storageLocation && exp.projects.length === 0))
-    : experiments.filter(exp => 
-        exp.storageLocation === 'draft' || (!exp.storageLocation && exp.projects.length === 0)
-      )
+  const draftExperiments = experiments.filter(exp => 
+    exp.storageLocation === 'draft' || (!exp.storageLocation && exp.projects.length === 0)
+  )
 
   // 计算超过10天未关联的暂存实验数量
   const staleDraftCount = draftExperiments.filter(exp => 
@@ -166,7 +186,9 @@ export function ExperimentList({ onCreateExperiment, onViewExperiment }: Experim
     if (!currentUser) return false
     if (currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN') return true
     
-    for (const project of experiments.flatMap(e => e.projects)) {
+    // 检查用户是否有参与的项目
+    const userProjects = experiments.flatMap(e => e.projects)
+    for (const project of userProjects) {
       const myMembership = project.members?.find(m => m.id === currentUser.id)
       if (myMembership && (myMembership as any).projectRole !== 'VIEWER') {
         return true
@@ -217,7 +239,7 @@ export function ExperimentList({ onCreateExperiment, onViewExperiment }: Experim
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
+          <Button variant="outline" size="icon" onClick={() => loadExperiments(viewMode)} disabled={isLoading}>
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
           {canCreateExperiment && (

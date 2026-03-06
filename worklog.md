@@ -1074,3 +1074,74 @@ antiword "upload/projects/.../iMSC分化SOP_1.doc"
 - ✅ 3个文档已更新
 - ✅ 文档版本号已统一更新为 v3.3.1
 - ✅ 变更记录已完善
+
+---
+
+## Task ID: 19 - v3.3.5 视角切换功能修复
+
+**日期**: 2025-03-05
+
+**背景**: 用户反馈项目管理和实验记录模块的普通/全局视角切换功能存在逻辑问题，实际没有区分开
+
+### 问题分析
+
+#### 问题1：ExperimentList.tsx 视角切换无效
+- **位置**: `src/components/experiments/ExperimentList.tsx` 第122-132行
+- **问题**: 全局视角和普通视角的过滤逻辑完全相同，视角切换没有任何效果
+- **原因**: 组件使用 AppContext 的 experiments 数据，而非独立的本地状态
+
+#### 问题2：ExperimentList 数据源依赖 AppContext
+- **问题**: AppContext 的 refreshData 函数调用 API 时不传递任何视角参数
+- **结果**: 管理员始终获取全局视角数据，切换到普通视角时数据没有变化
+
+#### 问题3：API 参数设计不一致
+- projects API 使用 `viewMode=default|global` 参数
+- experiments API 使用 `globalView=true|false` 参数
+- 两套不同的参数命名和默认行为逻辑
+
+#### 问题4：ProjectList.tsx 初始化双重请求
+- 初始值 viewMode='default'
+- useEffect 中检查管理员后切换到 'global'
+- 导致产生两次 API 请求
+
+#### 问题5：MyTasks.tsx 同样存在双重请求问题
+- 与 ProjectList 相同的模式
+
+### Work Log:
+
+#### 1. 修复 ExperimentList.tsx
+- 移除对 AppContext.experiments 的依赖
+- 添加本地 experiments 状态
+- 新增 loadExperiments 函数，根据视角调用 API
+- 统一使用 viewMode 参数
+
+#### 2. 修复 experiments API
+- 统一使用 `viewMode` 参数
+- 兼容旧的 `globalView` 参数
+- 管理员无参数时默认使用全局视角
+
+#### 3. 修复 ProjectList.tsx
+- 使用函数形式的初始值，直接在初始化时判断管理员角色
+- 避免双重请求问题
+
+#### 4. 修复 MyTasks.tsx
+- 移除对 AppContext 的 experiments 和 projects 依赖
+- 添加本地状态管理
+- 添加 loadData 函数并行获取实验和项目数据
+- 使用函数形式的初始值避免双重请求
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| src/components/experiments/ExperimentList.tsx | 重构 | 独立数据获取，视角切换逻辑修复 |
+| src/app/api/experiments/route.ts | 修改 | 统一viewMode参数，兼容旧参数 |
+| src/components/projects/ProjectList.tsx | 修改 | 修复初始化双重请求问题 |
+| src/components/tasks/MyTasks.tsx | 重构 | 独立数据获取，视角切换逻辑修复 |
+
+### Stage Summary:
+- ✅ ExperimentList 视角切换功能修复
+- ✅ experiments API 参数统一
+- ✅ ProjectList 初始化优化
+- ✅ MyTasks 视角切换功能完善
+- ✅ Lint 检查通过
+- ✅ 应用运行正常

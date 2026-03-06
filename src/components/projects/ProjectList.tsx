@@ -83,8 +83,15 @@ export function ProjectList({ onCreateProject, onViewProject }: ProjectListProps
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  // 管理员默认使用全局视角，普通用户使用普通视角
-  const [viewMode, setViewMode] = useState<ViewMode>('default')
+  
+  // 是否是管理员
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
+  
+  // 视角状态 - 管理员默认全局视角，普通用户普通视角（使用函数初始值避免双重请求）
+  const [viewMode, setViewMode] = useState<ViewMode>(() => 
+    isAdmin ? 'global' : 'default'
+  )
+  
   const [editProject, setEditProject] = useState<Project | null>(null)
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -94,16 +101,6 @@ export function ProjectList({ onCreateProject, onViewProject }: ProjectListProps
     status: 'ACTIVE' as Project['status']
   })
   const prevProjectsLengthRef = useRef(0)  // 用于检测项目数量变化
-
-  // 是否是管理员
-  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
-
-  // 根据用户角色自动设置默认视角
-  useEffect(() => {
-    if (isAdmin && viewMode === 'default') {
-      setViewMode('global')
-    }
-  }, [isAdmin])
 
   // 加载项目
   const loadProjects = useCallback(async (mode: ViewMode) => {

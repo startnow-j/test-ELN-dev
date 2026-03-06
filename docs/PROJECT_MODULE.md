@@ -1,7 +1,7 @@
 # BioLab ELN 项目管理模块说明文档
 
-> **版本**: v3.3.1  
-> **最后更新**: 2025-03-02  
+> **版本**: v3.3.5  
+> **最后更新**: 2025-03-05  
 > **维护者**: 开发团队
 
 ---
@@ -581,6 +581,30 @@ const updated = await db.$transaction(async (tx) => {
 ---
 
 ## 8. 变更记录
+
+### v3.3.5 (2025-03-05)
+
+**功能修复**:
+- [x] 视角切换功能修复 - API参数统一使用viewMode
+- [x] 项目关系标记细分 - 新增LEADING类型（项目负责人）
+- [x] default视角过滤逻辑修复 - 管理员普通视角只显示相关项目
+
+**修改文件**:
+- `src/app/api/projects/route.ts` - 修复default视角过滤、新增LEADING关系
+- `src/components/projects/ProjectList.tsx` - 使用函数初始值避免双重请求
+
+**API变更**:
+- `GET /api/projects` 统一使用 `viewMode` 参数（支持default/global）
+- 返回数据新增 `LEADING` 关系类型（项目成员表中role为PROJECT_LEAD）
+
+### v3.3.4 (2025-03-05)
+
+**功能调整**:
+- [x] 允许所有用户创建项目 - 移除创建项目的角色限制
+
+**修改文件**:
+- `src/app/api/projects/route.ts` - 移除后端角色限制
+- `src/components/projects/ProjectList.tsx` - 移除前端按钮权限判断
 
 ### v3.3.1 (2025-03-02)
 

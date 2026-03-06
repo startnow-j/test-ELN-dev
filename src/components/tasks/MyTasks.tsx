@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -97,22 +97,21 @@ const viewModeConfig: Record<ViewMode, { label: string; description: string; ico
 }
 
 export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
-  const { currentUser, experiments, projects, refreshData, reviewExperiment } = useApp()
+  const { currentUser, reviewExperiment } = useApp()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('drafts')
   const [searchTerm, setSearchTerm] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [experiments, setExperiments] = useState<Experiment[]>([])
+  const [projects, setProjects] = useState<{ id: string; ownerId: string }[]>([])
   
-  // 视角状态
-  const [viewMode, setViewMode] = useState<ViewMode>('default')
+  // 是否是管理员
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN'
   
-  // 管理员默认使用全局视角
-  useEffect(() => {
-    if (isAdmin && viewMode === 'default') {
-      setViewMode('global')
-    }
-  }, [isAdmin])
+  // 视角状态 - 管理员默认全局视角，普通用户普通视角（使用函数初始值避免双重请求）
+  const [viewMode, setViewMode] = useState<ViewMode>(() => 
+    isAdmin ? 'global' : 'default'
+  )
 
   // 审核对话框状态
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
@@ -131,11 +130,43 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false)
   const [feedbackExperiment, setFeedbackExperiment] = useState<Experiment | null>(null)
 
-  // 作为项目负责人的项目
-  const myProjectsAsLead = projects.filter(p => p.ownerId === currentUser?.id)
-  
   // 根据视角计算各类实验数量
   const useGlobalView = viewMode === 'global' && isAdmin
+  
+  // 加载数据
+  const loadData = useCallback(async (mode: ViewMode) => {
+    setIsLoading(true)
+    try {
+      // 并行获取实验和项目数据
+      const [experimentsRes, projectsRes] = await Promise.all([
+        fetch(`/api/experiments?viewMode=${mode}`),
+        fetch(`/api/projects?viewMode=${mode}`)
+      ])
+      
+      if (experimentsRes.ok) {
+        const data = await experimentsRes.json()
+        setExperiments(data)
+      }
+      if (projectsRes.ok) {
+        const data = await projectsRes.json()
+        setProjects(data)
+      }
+    } catch (error) {
+      console.error('Load data error:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+  
+  // 初始加载和视角切换时重新加载
+  useEffect(() => {
+    if (currentUser) {
+      loadData(viewMode)
+    }
+  }, [viewMode, currentUser, loadData])
+
+  // 作为项目负责人的项目
+  const myProjectsAsLead = projects.filter(p => p.ownerId === currentUser?.id)
   
   // 我的草稿
   const myDrafts = useGlobalView
@@ -315,7 +346,7 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={isLoading}>
+          <Button variant="outline" size="icon" onClick={() => loadData(viewMode)} disabled={isLoading}>
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
         </div>

@@ -109,22 +109,25 @@ export async function GET(request: NextRequest) {
     let filteredProjects = projectsWithRelation
 
     if (viewMode === 'my_created') {
+      // 只显示我创建的
       filteredProjects = projectsWithRelation.filter(p => p._relation === 'CREATED')
     } else if (viewMode === 'my_joined') {
-      filteredProjects = projectsWithRelation.filter(p => p._relation === 'JOINED')
+      // 只显示我参与的（不含创建的）
+      filteredProjects = projectsWithRelation.filter(p => p._relation === 'JOINED' || p._relation === 'LEADING')
     } else if (viewMode === 'global') {
-      // 全局视角 - 管理员可见所有项目
+      // 全局视角 - 管理员可见所有项目，非管理员只能看到自己相关的项目
       if (!isAdmin) {
-        // 非管理员只能看到自己相关的项目
-        filteredProjects = projectsWithRelation.filter(p => p._relation !== 'GLOBAL')
+        filteredProjects = projectsWithRelation.filter(p => 
+          p._relation === 'CREATED' || p._relation === 'LEADING' || p._relation === 'JOINED'
+        )
       }
+      // 管理员返回所有项目（不需要过滤）
     } else {
-      // 默认视角
-      // 管理员默认看到所有项目（全局视角）
-      // 非管理员只能看到自己创建或参与的项目
-      if (!isAdmin) {
-        filteredProjects = projectsWithRelation.filter(p => p._relation !== 'GLOBAL')
-      }
+      // default 普通视角 - 显示我创建或参与的项目
+      // 无论是管理员还是普通用户，都只显示与自己相关的项目
+      filteredProjects = projectsWithRelation.filter(p => 
+        p._relation === 'CREATED' || p._relation === 'LEADING' || p._relation === 'JOINED'
+      )
     }
 
     return NextResponse.json(filteredProjects)
