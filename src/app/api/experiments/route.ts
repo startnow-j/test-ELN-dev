@@ -29,8 +29,10 @@ export async function GET(request: NextRequest) {
     const draftsOnly = searchParams.get('draftsOnly') === 'true'
     const projectRelated = searchParams.get('projectRelated') === 'true'
 
-    // 只有管理员可以使用全局视角
-    const useGlobalView = (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && globalView
+    // 管理员默认使用全局视角（无需传参）
+    // 只有明确传 globalView=false 时才使用普通视角
+    const isAdminUser = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
+    const useGlobalView = isAdminUser && (globalView || !searchParams.has('globalView'))
 
     let experiments
 

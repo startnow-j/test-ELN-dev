@@ -112,8 +112,12 @@ export async function GET(request: NextRequest) {
         filteredProjects = projectsWithRelation.filter(p => p._relation !== 'GLOBAL')
       }
     } else {
-      // 默认视角 - 显示创建和参与的项目
-      filteredProjects = projectsWithRelation.filter(p => p._relation !== 'GLOBAL')
+      // 默认视角
+      // 管理员默认看到所有项目（全局视角）
+      // 非管理员只能看到自己创建或参与的项目
+      if (!isAdmin) {
+        filteredProjects = projectsWithRelation.filter(p => p._relation !== 'GLOBAL')
+      }
     }
 
     return NextResponse.json(filteredProjects)
