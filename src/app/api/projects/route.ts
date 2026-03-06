@@ -136,9 +136,10 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await db.user.findUnique({ where: { id: userId } })
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
-      return NextResponse.json({ error: '无权限创建项目' }, { status: 403 })
+    if (!user) {
+      return NextResponse.json({ error: '用户不存在' }, { status: 404 })
     }
+    // 所有已登录用户都可以创建项目（v3.3.3 调整）
 
     const body = await request.json()
     const { name, description, startDate, expectedEndDate, primaryLeader, memberIds } = body

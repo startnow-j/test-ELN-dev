@@ -307,12 +307,10 @@ export function ProjectList({ onCreateProject, onViewProject }: ProjectListProps
             管理研究项目和团队成员
           </p>
         </div>
-        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN') && (
-          <Button onClick={onCreateProject} className="gap-2">
-            <Plus className="w-4 h-4" />
-            新建项目
-          </Button>
-        )}
+        <Button onClick={onCreateProject} className="gap-2">
+          <Plus className="w-4 h-4" />
+          新建项目
+        </Button>
       </div>
 
       {/* 搜索、筛选和视角切换 */}
@@ -393,11 +391,9 @@ export function ProjectList({ onCreateProject, onViewProject }: ProjectListProps
               <p className="text-muted-foreground mb-4">
                 {searchTerm || statusFilter !== 'all'
                   ? '尝试调整搜索条件'
-                  : (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN')
-                    ? '点击下方按钮创建您的第一个项目'
-                    : '等待管理员创建项目'}
+                  : '点击下方按钮创建您的第一个项目'}
               </p>
-              {!searchTerm && statusFilter === 'all' && (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN') && (
+              {!searchTerm && statusFilter === 'all' && (
                 <Button onClick={onCreateProject}>
                   <Plus className="w-4 h-4 mr-2" />
                   新建项目
