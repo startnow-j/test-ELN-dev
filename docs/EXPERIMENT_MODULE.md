@@ -1,6 +1,6 @@
 # BioLab ELN 实验记录模块说明文档
 
-> **版本**: v3.3.5  
+> **版本**: v3.3.6  
 > **最后更新**: 2025-03-05  
 > **维护者**: 开发团队
 
@@ -11,12 +11,13 @@
 1. [模块概述](#1-模块概述)
 2. [数据模型](#2-数据模型)
 3. [API端点详解](#3-api端点详解)
-4. [业务逻辑](#4-业务逻辑)
-5. [权限控制](#5-权限控制)
-6. [文件存储](#6-文件存储)
-7. [完整度评分](#7-完整度评分)
-8. [附件处理](#8-附件处理)
-9. [变更记录](#9-变更记录)
+4. [前端视角切换](#4-前端视角切换)
+5. [业务逻辑](#5-业务逻辑)
+6. [权限控制](#6-权限控制)
+7. [文件存储](#7-文件存储)
+8. [完整度评分](#8-完整度评分)
+9. [附件处理](#9-附件处理)
+10. [变更记录](#10-变更记录)
 
 ---
 
@@ -249,9 +250,104 @@ model Attachment {
 
 ---
 
-## 4. 业务逻辑
+## 4. 前端视角切换
 
-### 4.1 状态流转图
+### 4.1 功能说明
+
+实验记录模块支持管理员和超级管理员切换视角，以查看不同范围的实验数据。
+
+| 视角 | 说明 | 可用角色 |
+|------|------|---------|
+| **普通视角** | 显示用户参与的实验（项目实验 + 自己的暂存实验） | 所有用户 |
+| **全局视角** | 显示所有实验记录 | ADMIN、SUPER_ADMIN |
+
+### 4.2 视角切换UI
+
+视角切换按钮位于页面标题右侧，仅管理员可见。
+
+**组件文件**: `src/components/experiments/ExperimentList.tsx`
+
+**核心实现**:
+
+```typescript
+type ViewMode = 'default' | 'global'
+
+// 管理员默认全局视角，普通用户普通视角
+const [viewMode, setViewMode] = useState<ViewMode>(() => 
+  isAdmin ? 'global' : 'default'
+)
+
+// 视角配置
+const viewModeConfig = {
+  default: { label: '普通视角', description: '显示我参与的实验', icon: <User /> },
+  global: { label: '全局视角', description: '显示所有实验（管理员）', icon: <Globe /> },
+}
+
+// 加载实验数据
+const loadExperiments = useCallback(async (mode: ViewMode) => {
+  const params = new URLSearchParams()
+  params.set('viewMode', mode)
+  
+  const res = await fetch(`/api/experiments?${params.toString()}`)
+  // ...
+}, [])
+
+// 切换视角时重新加载
+useEffect(() => {
+  if (currentUser) {
+    loadExperiments(viewMode)
+  }
+}, [viewMode, currentUser, loadExperiments])
+```
+
+### 4.3 视角切换UI组件
+
+```tsx
+{isAdmin && (
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="outline" className="gap-2">
+        {viewModeConfig[viewMode].icon}
+        {viewModeConfig[viewMode].label}
+        <ChevronDown className="w-4 h-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuLabel>切换视角</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {Object.entries(viewModeConfig).map(([mode, config]) => (
+        <DropdownMenuItem
+          key={mode}
+          onClick={() => setViewMode(mode as ViewMode)}
+          className={viewMode === mode ? 'bg-muted' : ''}
+        >
+          <div className="flex items-center gap-2">
+            {config.icon}
+            <div>
+              <p className="font-medium">{config.label}</p>
+              <p className="text-xs text-muted-foreground">{config.description}</p>
+            </div>
+          </div>
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+)}
+```
+
+### 4.4 视角切换行为
+
+| 行为 | 说明 |
+|------|------|
+| 默认视角 | 管理员默认全局视角，普通用户默认普通视角 |
+| 独立数据获取 | 切换视角时重新调用API获取数据 |
+| 页面描述变化 | "管理您的所有实验记录" ↔ "管理所有用户的实验记录（全局视角）" |
+
+---
+
+## 5. 业务逻辑
+
+### 5.1 状态流转图
 
 ```
 ┌─────────┐     提交审核      ┌────────────────┐
@@ -272,7 +368,7 @@ model Attachment {
                                                       └──────────▶ ...
 ```
 
-### 4.2 项目关联规则
+### 5.2 项目关联规则
 
 | 场景 | 存储位置 | 文件处理 |
 |------|---------|---------|
@@ -280,7 +376,7 @@ model Attachment {
 | 单项目关联 | 项目ID | 存储在项目目录 |
 | 多项目关联 | 主项目ID | 主项目存储 + 其他项目 `.link` 文件 |
 
-### 4.3 实验迁移逻辑
+### 5.3 实验迁移逻辑
 
 当暂存实验关联项目时：
 1. 验证用户对项目的权限
@@ -291,9 +387,9 @@ model Attachment {
 
 ---
 
-## 5. 权限控制
+## 6. 权限控制
 
-### 5.1 权限矩阵
+### 6.1 权限矩阵
 
 | 操作 | SUPER_ADMIN | ADMIN | PROJECT_LEAD | MEMBER | VIEWER | 作者 |
 |------|:-----------:|:-----:|:------------:|:------:|:------:|:----:|
@@ -306,7 +402,7 @@ model Attachment {
 | 审核实验 | ✅ | ✅ | ✅(非自己) | ❌ | ❌ | ❌ |
 | 解锁实验 | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 
-### 5.2 权限检查函数
+### 6.2 权限检查函数
 
 ```typescript
 // 检查是否可编辑实验
@@ -348,9 +444,9 @@ export async function canViewExperiment(userId: string, experimentId: string): P
 
 ---
 
-## 6. 文件存储
+## 7. 文件存储
 
-### 6.1 存储路径规则
+### 7.1 存储路径规则
 
 **暂存区路径**:
 ```
@@ -367,7 +463,7 @@ upload/projects/{项目名称}/experiments/{日期}_{实验标题}/{日期}_{原
 upload/projects/{项目名称}/experiments/{实验ID}.link
 ```
 
-### 6.2 文件命名处理
+### 7.2 文件命名处理
 
 ```typescript
 function sanitizeName(name: string): string {
@@ -378,7 +474,7 @@ function sanitizeName(name: string): string {
 }
 ```
 
-### 6.3 冲突处理
+### 7.3 冲突处理
 
 ```typescript
 function getUniqueFilename(dir: string, filename: string): string {
@@ -398,9 +494,9 @@ function getUniqueFilename(dir: string, filename: string): string {
 
 ---
 
-## 7. 完整度评分
+## 8. 完整度评分
 
-### 7.1 评分规则（v3.3 更新）
+### 8.1 评分规则（v3.3 更新）
 
 | 评分项 | 满分 | 条件 |
 |--------|------|------|
@@ -413,7 +509,7 @@ function getUniqueFilename(dir: string, filename: string): string {
 | 标签 | 10分 | 有标签即得分 |
 | **总计** | **100分** | - |
 
-### 7.2 提交要求
+### 8.2 提交要求
 
 - **最低完整度**: 60分
 - **必须关联项目**: 无项目关联不能提交审核
@@ -421,16 +517,16 @@ function getUniqueFilename(dir: string, filename: string): string {
 
 ---
 
-## 8. 附件处理
+## 9. 附件处理
 
-### 8.1 上传限制
+### 9.1 上传限制
 
 | 项目 | 限制 |
 |------|------|
 | 单文件大小 | 最大 50MB |
 | 支持格式 | Word (.doc/.docx), PDF, Excel, 图片, 文本 |
 
-### 8.2 预览数据提取（v3.3 更新）
+### 9.2 预览数据提取（v3.3 更新）
 
 | 文件类型 | 提取方式 | 提取内容 |
 |---------|---------|---------|
@@ -441,7 +537,7 @@ function getUniqueFilename(dir: string, filename: string): string {
 | Markdown/Text | 直接读取 | 全部内容 |
 | 图片 | - | 不提取 |
 
-### 8.3 附件API
+### 9.3 附件API
 
 **上传附件**: `POST /api/attachments`
 - Content-Type: `multipart/form-data`
@@ -453,7 +549,14 @@ function getUniqueFilename(dir: string, filename: string): string {
 
 ---
 
-## 9. 变更记录
+## 10. 变更记录
+
+### v3.3.6 (2025-03-05)
+
+**文档更新**:
+- [x] 新增"前端视角切换"章节（第4章）
+- [x] 完善视角切换UI实现说明
+- [x] 调整章节编号
 
 ### v3.3.5 (2025-03-05)
 

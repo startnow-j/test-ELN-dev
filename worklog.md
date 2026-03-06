@@ -1272,3 +1272,43 @@ antiword "upload/projects/.../iMSC分化SOP_1.doc"
 - 锁定PDF生成
 - AI项目汇总
 - AI服务管理模块
+
+---
+
+## Task ID: 22 - 文档修订与过时文档清理
+
+**日期**: 2025-03-05
+
+**背景**: 用户指出部分文档未及时更新，缺少全局视角切换功能的说明
+
+### Work Log:
+
+#### 1. 删除过时文档
+- **删除**: `docs/GLOBAL_VIEW_IMPLEMENTATION_PLAN.md`
+- **原因**: 该文档是实施计划文档（状态为"待实施"），但功能已全部实现，文档已过时
+
+#### 2. 更新 MY_TASKS_MODULE.md
+- 版本更新为 v3.4.1
+- 新增"全局视角切换"章节，说明功能实现
+- 详细记录各Tab在不同视角下的数据范围
+- 新增 v3.4.1 版本变更记录
+
+#### 3. 更新 EXPERIMENT_MODULE.md
+- 版本更新为 v3.3.6
+- 新增"前端视角切换"章节（第4章）
+- 补充视角切换UI实现代码说明
+- 调整后续章节编号（5-10章）
+- 新增 v3.3.6 版本变更记录
+
+### 文件变更:
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| docs/GLOBAL_VIEW_IMPLEMENTATION_PLAN.md | 删除 | 过时的实施计划文档 |
+| docs/MY_TASKS_MODULE.md | 修改 | 新增全局视角切换章节 |
+| docs/EXPERIMENT_MODULE.md | 修改 | 新增前端视角切换章节 |
+
+### Stage Summary:
+- ✅ 过时文档已清理
+- ✅ MY_TASKS_MODULE.md 已更新（v3.4.1）
+- ✅ EXPERIMENT_MODULE.md 已更新（v3.3.6）
+- ✅ 全局视角切换功能文档已完善
