@@ -13,6 +13,7 @@ export interface AppUser {
   name: string
   role: UserRole
   avatar: string | null
+  projectRole?: string | null  // 项目角色（优先显示）
 }
 
 // 项目关系类型
@@ -130,6 +131,7 @@ export interface Experiment {
   attachments: Attachment[]
   reviewFeedbacks?: ReviewFeedback[]
   reviewRequests?: ReviewRequest[]
+  unlockRequests?: UnlockRequest[]
   createdAt: string
   updatedAt: string
   submittedAt: string | null
@@ -139,7 +141,7 @@ export interface Experiment {
 // 审核反馈类型
 export interface ReviewFeedback {
   id: string
-  action: 'APPROVE' | 'REQUEST_REVISION' | 'SUBMIT' | 'TRANSFER' | 'UNLOCK'
+  action: 'SUBMIT' | 'APPROVE' | 'REQUEST_REVISION' | 'TRANSFER' | 'UNLOCK'
   feedback: string | null
   createdAt: string
   experimentId: string
@@ -166,6 +168,20 @@ export interface ReviewRequest {
   updatedAt: string
   reviewerId: string
   reviewer: AppUser
+}
+
+// 解锁申请类型
+export interface UnlockRequest {
+  id: string
+  reason: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+  response: string | null
+  createdAt: string
+  processedAt: string | null
+  requesterId: string
+  requester: AppUser
+  processorId: string | null
+  processor: AppUser | null
 }
 
 // 模板类型

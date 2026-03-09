@@ -5,7 +5,7 @@ import { AuditAction } from '@prisma/client'
 import { canCreateExperiment, getUserAccessibleProjects, hasProjectPermission, isAdmin } from '@/lib/permissions'
 import { calculateCompletenessScore } from '@/lib/completenessScore'
 
-// 获取实验列表
+// 获取实验列表 - v3.3.7 更新：添加 unlockRequests 和 projectRole 支持
 export async function GET(request: NextRequest) {
   try {
     const userId = await getUserIdFromToken(request)
@@ -43,48 +43,65 @@ export async function GET(request: NextRequest) {
       (!searchParams.has('viewMode') && !searchParams.has('globalView') && !searchParams.has('draftsOnly') && !searchParams.has('projectRelated'))
     )
 
+    // 公共的 include 配置，包含 unlockRequests 和 projectMembers
+    const experimentInclude = {
+      author: {
+        select: { id: true, name: true, email: true, role: true, avatar: true }
+      },
+      experimentProjects: {
+        include: {
+          project: {
+            include: {
+              owner: {
+                select: { id: true, name: true, email: true, role: true, avatar: true }
+              },
+              members: {
+                select: { id: true, name: true, email: true, role: true, avatar: true }
+              },
+              projectMembers: {
+                select: { userId: true, role: true }
+              }
+            }
+          }
+        }
+      },
+      attachments: true,
+      reviewFeedbacks: {
+        include: {
+          reviewer: {
+            select: { id: true, name: true, email: true, role: true, avatar: true }
+          },
+          attachments: true
+        },
+        orderBy: { createdAt: 'desc' } as const
+      },
+      reviewRequests: {
+        include: {
+          reviewer: {
+            select: { id: true, name: true, email: true, role: true, avatar: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' } as const
+      },
+      unlockRequests: {
+        include: {
+          requester: {
+            select: { id: true, name: true, email: true, role: true, avatar: true }
+          },
+          processor: {
+            select: { id: true, name: true, email: true, role: true, avatar: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' } as const
+      }
+    }
+
     let experiments
 
     if (useGlobalView) {
       // 管理员全局视角：查看所有实验
       experiments = await db.experiment.findMany({
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, role: true, avatar: true }
-          },
-          experimentProjects: {
-            include: {
-              project: {
-                include: {
-                  owner: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  },
-                  members: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  }
-                }
-              }
-            }
-          },
-          attachments: true,
-          reviewFeedbacks: {
-            include: {
-              reviewer: {
-                select: { id: true, name: true, email: true, role: true, avatar: true }
-              },
-              attachments: true
-            },
-            orderBy: { createdAt: 'desc' }
-          },
-          reviewRequests: {
-            include: {
-              reviewer: {
-                select: { id: true, name: true, email: true, role: true, avatar: true }
-              }
-            },
-            orderBy: { createdAt: 'desc' }
-          }
-        },
+        include: experimentInclude,
         orderBy: { updatedAt: 'desc' }
       })
     } else if (draftsOnly) {
@@ -94,23 +111,7 @@ export async function GET(request: NextRequest) {
           authorId: userId,
           storageLocation: 'draft'
         },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, role: true, avatar: true }
-          },
-          experimentProjects: {
-            include: {
-              project: {
-                include: {
-                  owner: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  }
-                }
-              }
-            }
-          },
-          attachments: true
-        },
+        include: experimentInclude,
         orderBy: { updatedAt: 'desc' }
       })
     } else if (projectRelated) {
@@ -130,43 +131,7 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, role: true, avatar: true }
-          },
-          experimentProjects: {
-            include: {
-              project: {
-                include: {
-                  owner: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  },
-                  members: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  }
-                }
-              }
-            }
-          },
-          attachments: true,
-          reviewFeedbacks: {
-            include: {
-              reviewer: {
-                select: { id: true, name: true, email: true, role: true, avatar: true }
-              },
-              attachments: true
-            },
-            orderBy: { createdAt: 'desc' }
-          },
-          reviewRequests: {
-            include: {
-              reviewer: {
-                select: { id: true, name: true, email: true, role: true, avatar: true }
-              }
-            },
-            orderBy: { createdAt: 'desc' }
-          }
-        },
+        include: experimentInclude,
         orderBy: { updatedAt: 'desc' }
       })
     } else {
@@ -198,114 +163,117 @@ export async function GET(request: NextRequest) {
         where: {
           OR: whereConditions
         },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, role: true, avatar: true }
-          },
-          experimentProjects: {
-            include: {
-              project: {
-                include: {
-                  owner: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  },
-                  members: {
-                    select: { id: true, name: true, email: true, role: true, avatar: true }
-                  }
-                }
-              }
-            }
-          },
-          attachments: true,
-          reviewFeedbacks: {
-            include: {
-              reviewer: {
-                select: { id: true, name: true, email: true, role: true, avatar: true }
-              },
-              attachments: true
-            },
-            orderBy: { createdAt: 'desc' }
-          },
-          reviewRequests: {
-            include: {
-              reviewer: {
-                select: { id: true, name: true, email: true, role: true, avatar: true }
-              }
-            },
-            orderBy: { createdAt: 'desc' }
-          }
-        },
+        include: experimentInclude,
         orderBy: { updatedAt: 'desc' }
       })
     }
 
     // 转换数据格式
-    const formattedExperiments = experiments.map(exp => ({
-      id: exp.id,
-      title: exp.title,
-      summary: exp.summary,
-      conclusion: exp.conclusion,
-      extractedInfo: exp.extractedInfo ? JSON.parse(exp.extractedInfo) : null,
-      extractionStatus: exp.extractionStatus,
-      extractionError: exp.extractionError,
-      reviewStatus: exp.reviewStatus,
-      completenessScore: exp.completenessScore,
-      tags: exp.tags,
-      authorId: exp.authorId,
-      author: exp.author,
-      storageLocation: exp.storageLocation,
-      primaryProjectId: exp.primaryProjectId,
-      projects: exp.experimentProjects.map(ep => ({
-        id: ep.project.id,
-        name: ep.project.name,
-        description: ep.project.description,
-        status: ep.project.status,
-        startDate: ep.project.startDate,
-        endDate: ep.project.endDate,
-        ownerId: ep.project.ownerId,
-        owner: ep.project.owner,
-        members: ep.project.members,
-        createdAt: ep.project.createdAt.toISOString()
-      })),
-      attachments: exp.attachments.map(att => ({
-        id: att.id,
-        name: att.name,
-        type: att.type,
-        size: att.size,
-        path: att.path,
-        category: att.category,
-        previewData: att.extractedText ? JSON.parse(att.extractedText) : null,
-        createdAt: att.createdAt.toISOString()
-      })),
-      reviewFeedbacks: exp.reviewFeedbacks ? exp.reviewFeedbacks.map(rf => ({
-        id: rf.id,
-        action: rf.action,
-        feedback: rf.feedback,
-        createdAt: rf.createdAt.toISOString(),
-        reviewerId: rf.reviewerId,
-        reviewer: rf.reviewer,
-        attachments: rf.attachments ? rf.attachments.map(att => ({
+    const formattedExperiments = experiments.map(exp => {
+      // 构建项目角色映射表
+      const projectRoleMap: Record<string, string> = {}
+      for (const ep of exp.experimentProjects) {
+        for (const pm of ep.project.projectMembers) {
+          const existingRole = projectRoleMap[pm.userId]
+          const rolePriority = { PROJECT_LEAD: 3, MEMBER: 2, VIEWER: 1 }
+          if (!existingRole || (rolePriority[pm.role as keyof typeof rolePriority] || 0) > (rolePriority[existingRole as keyof typeof rolePriority] || 0)) {
+            projectRoleMap[pm.userId] = pm.role
+          }
+        }
+        // 项目owner默认是负责人
+        if (ep.project.ownerId) {
+          projectRoleMap[ep.project.ownerId] = 'PROJECT_LEAD'
+        }
+      }
+
+      // 辅助函数：为用户添加项目角色
+      const getUserWithProjectRole = (user: { id: string; name: string; email: string; role: string; avatar?: string | null } | null) => {
+        if (!user) return null
+        return {
+          ...user,
+          projectRole: projectRoleMap[user.id] || null
+        }
+      }
+
+      return {
+        id: exp.id,
+        title: exp.title,
+        summary: exp.summary,
+        conclusion: exp.conclusion,
+        extractedInfo: exp.extractedInfo ? JSON.parse(exp.extractedInfo) : null,
+        extractionStatus: exp.extractionStatus,
+        extractionError: exp.extractionError,
+        reviewStatus: exp.reviewStatus,
+        completenessScore: exp.completenessScore,
+        tags: exp.tags,
+        authorId: exp.authorId,
+        author: getUserWithProjectRole(exp.author),
+        storageLocation: exp.storageLocation,
+        primaryProjectId: exp.primaryProjectId,
+        projects: exp.experimentProjects.map(ep => ({
+          id: ep.project.id,
+          name: ep.project.name,
+          description: ep.project.description,
+          status: ep.project.status,
+          startDate: ep.project.startDate,
+          endDate: ep.project.endDate,
+          ownerId: ep.project.ownerId,
+          owner: ep.project.owner,
+          members: ep.project.members,
+          createdAt: ep.project.createdAt.toISOString()
+        })),
+        attachments: exp.attachments.map(att => ({
           id: att.id,
           name: att.name,
-          size: att.size,
           type: att.type,
+          size: att.size,
+          path: att.path,
+          category: att.category,
+          previewData: att.extractedText ? JSON.parse(att.extractedText) : null,
           createdAt: att.createdAt.toISOString()
-        })) : []
-      })) : [],
-      reviewRequests: exp.reviewRequests ? exp.reviewRequests.map(rr => ({
-        id: rr.id,
-        status: rr.status,
-        note: rr.note,
-        createdAt: rr.createdAt.toISOString(),
-        updatedAt: rr.updatedAt.toISOString(),
-        reviewerId: rr.reviewerId,
-        reviewer: rr.reviewer
-      })) : [],
-      createdAt: exp.createdAt.toISOString(),
-      updatedAt: exp.updatedAt.toISOString(),
-      submittedAt: exp.submittedAt?.toISOString() || null,
-      reviewedAt: exp.reviewedAt?.toISOString() || null
-    }))
+        })),
+        reviewFeedbacks: exp.reviewFeedbacks ? exp.reviewFeedbacks.map(rf => ({
+          id: rf.id,
+          action: rf.action,
+          feedback: rf.feedback,
+          createdAt: rf.createdAt.toISOString(),
+          reviewerId: rf.reviewerId,
+          reviewer: getUserWithProjectRole(rf.reviewer),
+          attachments: rf.attachments ? rf.attachments.map(att => ({
+            id: att.id,
+            name: att.name,
+            size: att.size,
+            type: att.type,
+            createdAt: att.createdAt.toISOString()
+          })) : []
+        })) : [],
+        reviewRequests: exp.reviewRequests ? exp.reviewRequests.map(rr => ({
+          id: rr.id,
+          status: rr.status,
+          note: rr.note,
+          createdAt: rr.createdAt.toISOString(),
+          updatedAt: rr.updatedAt.toISOString(),
+          reviewerId: rr.reviewerId,
+          reviewer: getUserWithProjectRole(rr.reviewer)
+        })) : [],
+        unlockRequests: exp.unlockRequests ? exp.unlockRequests.map(ur => ({
+          id: ur.id,
+          reason: ur.reason,
+          status: ur.status,
+          response: ur.response,
+          createdAt: ur.createdAt.toISOString(),
+          processedAt: ur.processedAt?.toISOString() || null,
+          requesterId: ur.requesterId,
+          requester: getUserWithProjectRole(ur.requester),
+          processorId: ur.processorId,
+          processor: getUserWithProjectRole(ur.processor)
+        })) : [],
+        createdAt: exp.createdAt.toISOString(),
+        updatedAt: exp.updatedAt.toISOString(),
+        submittedAt: exp.submittedAt?.toISOString() || null,
+        reviewedAt: exp.reviewedAt?.toISOString() || null
+      }
+    })
 
     return NextResponse.json(formattedExperiments)
   } catch (error) {

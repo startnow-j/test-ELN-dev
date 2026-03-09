@@ -1,63 +1,19 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { 
-  Send, 
-  CheckCircle, 
-  XCircle, 
-  ArrowUp, 
-  Lock,
-  CornerDownRight,
-  Unlock,
-  Clock
-} from 'lucide-react'
-import { AppUser } from '@/contexts/AppContext'
-
-// 审核请求类型
-interface ReviewRequest {
-  id: string
-  status: string
-  note: string | null
-  createdAt: string
-  updatedAt: string
-  reviewerId: string
-  reviewer: AppUser
-}
-
-// 批注附件类型
-interface ReviewAttachment {
-  id: string
-  name: string
-  size: number
-  type: string
-  createdAt: string
-}
-
-// 审核反馈类型
-interface ReviewFeedback {
-  id: string
-  action: string
-  feedback: string | null
-  createdAt: string
-  reviewerId: string
-  reviewer: AppUser
-  attachments?: ReviewAttachment[]
-}
-
-interface ReviewHistoryProps {
-  reviewFeedbacks: ReviewFeedback[]
-  reviewRequests: ReviewRequest[]
-  reviewStatus: string
-  reviewedAt?: string | null
-  attachmentCount: number
-}
+import { ArrowUp, Lock } from 'lucide-react'
+import { AppUser, ReviewFeedback, ReviewRequest, UnlockRequest } from '@/contexts/AppContext'
 
 // 角色显示名称映射
 const roleLabels: Record<string, string> = {
+  // 系统角色
   SUPER_ADMIN: '超级管理员',
   ADMIN: '管理员',
   RESEARCHER: '研究员',
+  // 项目角色
+  PROJECT_LEAD: '项目负责人',
+  MEMBER: '参与人',
+  VIEWER: '观察员',
 }
 
 // 时间格式化
@@ -71,82 +27,241 @@ const formatDateTime = (dateString: string) => {
   })
 }
 
-// 获取角色显示名称
-const getRoleLabel = (role: string): string => {
-  return roleLabels[role] || role
+// 获取角色显示名称（优先项目角色）
+const getRoleLabel = (user: AppUser | null | undefined): string => {
+  if (!user) return ''
+  // 优先显示项目角色（如果存在）
+  if (user.projectRole) {
+    return roleLabels[user.projectRole] || user.projectRole
+  }
+  // 回退到系统角色
+  return roleLabels[user.role] || user.role
+}
+
+// 获取用户显示文本
+const getUserDisplay = (user: AppUser | null | undefined): string => {
+  if (!user) return '未知'
+  const roleLabel = getRoleLabel(user)
+  return `${user.name}（${roleLabel}）`
+}
+
+// 事件类型定义
+type EventType = 
+  | 'SUBMIT'           // 提交审核
+  | 'TRANSFER'         // 转交审核
+  | 'APPROVE'          // 审核通过
+  | 'REQUEST_REVISION' // 要求修改
+  | 'LOCK'             // 记录锁定
+  | 'UNLOCK_REQUEST'   // 申请解锁
+  | 'UNLOCK_APPROVED'  // 批准解锁
+  | 'UNLOCK_REJECTED'  // 拒绝解锁
+
+// 历史事件接口
+interface HistoryEvent {
+  id: string
+  stepNumber: number
+  type: EventType
+  timestamp: string
+  actor?: AppUser | null           // 操作人
+  targets?: AppUser[]              // 目标人列表（支持多个）
+  message?: string | null          // 留言/原因/意见
+  attachments?: string[]           // 附件文件名列表
+}
+
+interface ReviewHistoryProps {
+  reviewFeedbacks: ReviewFeedback[]
+  reviewRequests: ReviewRequest[]
+  unlockRequests: UnlockRequest[]
+  reviewStatus: string
+  reviewedAt?: string | null
+  attachmentCount: number
+  author: AppUser
 }
 
 export function ReviewHistory({ 
   reviewFeedbacks, 
   reviewRequests, 
+  unlockRequests,
   reviewStatus, 
   reviewedAt,
-  attachmentCount 
+  attachmentCount,
+  author
 }: ReviewHistoryProps) {
   // 构建审核历史事件列表
-  const events: Array<{
-    id: string  // 唯一标识符
-    type: string
-    timestamp: string
-    user?: AppUser
-    target?: AppUser
-    feedback?: string | null
-    note?: string | null
-    status?: string
-    attachments?: ReviewAttachment[]
-  }> = []
+  const events: HistoryEvent[] = []
 
-  // 添加审核请求事件（提交审核）
-  reviewRequests.forEach(request => {
-    if (request.status === 'PENDING' || request.status === 'COMPLETED') {
-      events.push({
-        id: `request-${request.id}`,
-        type: 'SUBMIT',
-        timestamp: request.createdAt,
-        target: request.reviewer,
-        note: request.note,
-      })
-    }
-    if (request.status === 'TRANSFERRED') {
-      events.push({
-        id: `transfer-${request.id}`,
-        type: 'TRANSFER',
-        timestamp: request.updatedAt,
-        target: request.reviewer,
-        note: request.note,
-      })
-    }
-  })
+  // 调试：打印解锁请求数据
+  console.log('ReviewHistory - unlockRequests:', unlockRequests)
+  console.log('ReviewHistory - reviewFeedbacks:', reviewFeedbacks)
+  console.log('ReviewHistory - reviewRequests:', reviewRequests)
 
-  // 添加审核反馈事件
-  reviewFeedbacks.forEach(feedback => {
-    let eventType = feedback.action
+  // 1. 处理 ReviewFeedback（按时间顺序）
+  const sortedFeedbacks = [...reviewFeedbacks].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+  
+  // 2. 处理 ReviewRequest（用于获取提交审核的目标审核人）
+  const sortedRequests = [...reviewRequests].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  // 3. 处理 UnlockRequest
+  const sortedUnlockRequests = [...unlockRequests].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  // 查找提交审核的目标审核人（可能多个）
+  // 注意：ReviewRequest 的状态可能在审核完成后改变，所以不依赖状态来判断
+  const findSubmitTargets = (submitTimestamp: string): AppUser[] => {
+    const submitTime = new Date(submitTimestamp).getTime()
+    const targets: AppUser[] = []
+    const addedIds = new Set<string>()
     
-    // 检查是否是解锁相关操作
-    if (feedback.action === 'UNLOCK') {
-      // 根据 feedback 内容判断解锁操作类型
-      const fb = feedback.feedback?.toLowerCase() || ''
-      if (fb.includes('批准') || fb.includes('同意')) {
-        eventType = 'UNLOCK_APPROVED'
-      } else if (fb.includes('拒绝') || fb.includes('驳回')) {
-        eventType = 'UNLOCK_REJECTED'
-      } else if (fb.includes('申请')) {
-        eventType = 'UNLOCK_REQUEST'
+    // 找到在这个 SUBMIT 时间点（±3秒）创建的所有 ReviewRequest
+    // 这表示这些审核人是本次提交的目标
+    for (const rr of sortedRequests) {
+      const rrTime = new Date(rr.createdAt).getTime()
+      // 时间差在3秒内，不检查状态（因为状态可能已经改变）
+      if (Math.abs(rrTime - submitTime) <= 3000) {
+        if (!addedIds.has(rr.reviewer.id)) {
+          targets.push(rr.reviewer)
+          addedIds.add(rr.reviewer.id)
+        }
       }
     }
+    return targets
+  }
+
+  // 查找 TRANSFER 目标
+  const findTransferTarget = (transferTimestamp: string): AppUser | null => {
+    const transferTime = new Date(transferTimestamp).getTime()
     
-    events.push({
-      id: `feedback-${feedback.id}`,
-      type: eventType,
-      timestamp: feedback.createdAt,
-      user: feedback.reviewer,
-      feedback: feedback.feedback,
-      attachments: feedback.attachments,
-    })
+    for (const rr of sortedRequests) {
+      const rrTime = new Date(rr.createdAt).getTime()
+      if (rrTime > transferTime && rrTime < transferTime + 10000 && rr.status === 'PENDING') {
+        return rr.reviewer
+      }
+    }
+    return null
+  }
+
+  // 处理每个 ReviewFeedback
+  sortedFeedbacks.forEach(feedback => {
+    switch (feedback.action) {
+      case 'SUBMIT': {
+        // 提交审核：操作人是作者，目标是审核人（可能多个）
+        const targetReviewers = findSubmitTargets(feedback.createdAt)
+        
+        events.push({
+          id: `submit-${feedback.id}`,
+          stepNumber: 0,
+          type: 'SUBMIT',
+          timestamp: feedback.createdAt,
+          actor: author,
+          targets: targetReviewers.length > 0 ? targetReviewers : undefined,
+          message: feedback.feedback,
+        })
+        break
+      }
+      
+      case 'TRANSFER': {
+        const targetUser = findTransferTarget(feedback.createdAt)
+        events.push({
+          id: `transfer-${feedback.id}`,
+          stepNumber: 0,
+          type: 'TRANSFER',
+          timestamp: feedback.createdAt,
+          actor: feedback.reviewer,
+          targets: targetUser ? [targetUser] : undefined,
+          message: feedback.feedback,
+        })
+        break
+      }
+      
+      case 'APPROVE': {
+        events.push({
+          id: `approve-${feedback.id}`,
+          stepNumber: 0,
+          type: 'APPROVE',
+          timestamp: feedback.createdAt,
+          actor: feedback.reviewer,
+          message: feedback.feedback,
+        })
+        
+        // 审核通过后添加锁定事件
+        events.push({
+          id: `lock-${feedback.id}`,
+          stepNumber: 0,
+          type: 'LOCK',
+          timestamp: feedback.createdAt,
+          message: `共 ${attachmentCount} 个附件`,
+        })
+        break
+      }
+      
+      case 'REQUEST_REVISION': {
+        events.push({
+          id: `revision-${feedback.id}`,
+          stepNumber: 0,
+          type: 'REQUEST_REVISION',
+          timestamp: feedback.createdAt,
+          actor: feedback.reviewer,
+          message: feedback.feedback,
+          attachments: feedback.attachments?.map(a => a.name),
+        })
+        break
+      }
+      
+      case 'UNLOCK': {
+        // 解锁相关操作由 unlockRequests 处理，这里跳过
+        break
+      }
+    }
   })
 
-  // 按时间倒序排序（最新的在上面）
-  events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  // 处理解锁申请
+  sortedUnlockRequests.forEach(ur => {
+    console.log('Processing unlock request:', ur.id, ur.status, ur.requester?.name)
+    
+    // 申请解锁
+    events.push({
+      id: `unlock-request-${ur.id}`,
+      stepNumber: 0,
+      type: 'UNLOCK_REQUEST',
+      timestamp: ur.createdAt,
+      actor: ur.requester,
+      message: ur.reason,
+    })
+    
+    // 处理结果
+    if (ur.status === 'APPROVED' && ur.processor) {
+      events.push({
+        id: `unlock-approved-${ur.id}`,
+        stepNumber: 0,
+        type: 'UNLOCK_APPROVED',
+        timestamp: ur.processedAt || ur.createdAt,
+        actor: ur.processor,
+        message: ur.response,
+      })
+    } else if (ur.status === 'REJECTED' && ur.processor) {
+      events.push({
+        id: `unlock-rejected-${ur.id}`,
+        stepNumber: 0,
+        type: 'UNLOCK_REJECTED',
+        timestamp: ur.processedAt || ur.createdAt,
+        actor: ur.processor,
+        message: ur.response,
+      })
+    }
+  })
+
+  // 按时间排序（正序，最早的在前）
+  events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  
+  // 分配步骤编号
+  events.forEach((event, index) => {
+    event.stepNumber = index + 1
+  })
 
   // 如果没有审核历史，且是锁定状态，显示锁定信息
   if (events.length === 0 && reviewStatus === 'LOCKED') {
@@ -156,15 +271,15 @@ export function ReviewHistory({
           <CardTitle className="text-lg">审核历史</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50">
-            <Lock className="w-5 h-5 text-green-600" />
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-gray-50">
+            <Lock className="w-5 h-5 text-gray-600" />
             <div className="flex-1">
-              <p className="font-medium text-green-800">记录已锁定</p>
-              <p className="text-sm text-green-600">
+              <p className="font-medium text-gray-800">记录已锁定</p>
+              <p className="text-sm text-gray-600">
                 锁定时间：{reviewedAt ? formatDateTime(reviewedAt) : '-'}
               </p>
-              <p className="text-sm text-green-600 flex items-center gap-1 mt-1">
-                <span>📎 附件：{attachmentCount} 个</span>
+              <p className="text-sm text-gray-600 mt-1">
+                附件：{attachmentCount} 个
               </p>
             </div>
           </div>
@@ -178,124 +293,115 @@ export function ReviewHistory({
     return null
   }
 
-  // 格式化文件大小
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return bytes + ' B'
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-  }
-
-  // 渲染单个事件卡片
-  const renderEventCard = (event: typeof events[0], index: number) => {
-    const isLast = index === events.length - 1
+  // 获取事件描述文本
+  const getEventDescription = (event: HistoryEvent): string => {
+    const actor = getUserDisplay(event.actor)
     
-    let icon: React.ReactNode
-    let title: string
-    let bgColor: string
-    let borderColor: string
+    // 格式化多个目标人
+    const formatTargets = (targets: AppUser[] | undefined): string => {
+      if (!targets || targets.length === 0) return ''
+      if (targets.length === 1) {
+        return getUserDisplay(targets[0])
+      }
+      // 多个目标人：显示所有名字，用顿号分隔
+      const names = targets.map(t => t.name).join('、')
+      return names
+    }
+    
+    const targetStr = formatTargets(event.targets)
     
     switch (event.type) {
       case 'SUBMIT':
-        icon = <Send className="w-5 h-5 text-blue-600" />
-        title = '提交审核'
-        bgColor = 'bg-blue-50'
-        borderColor = 'border-blue-200'
-        break
+        return targetStr ? `${actor}向${targetStr}提交审核` : `${actor}提交审核`
       case 'TRANSFER':
-        icon = <CornerDownRight className="w-5 h-5 text-purple-600" />
-        title = '转交审核'
-        bgColor = 'bg-purple-50'
-        borderColor = 'border-purple-200'
+        return targetStr ? `${actor}向${targetStr}转交审核` : `${actor}转交审核`
+      case 'APPROVE':
+        return `${actor}通过审批`
+      case 'REQUEST_REVISION':
+        return `${actor}要求修改`
+      case 'LOCK':
+        return `记录锁定`
+      case 'UNLOCK_REQUEST':
+        return `${actor}申请解锁`
+      case 'UNLOCK_APPROVED':
+        return `${actor}批准解锁`
+      case 'UNLOCK_REJECTED':
+        return `${actor}拒绝解锁`
+      default:
+        return '未知操作'
+    }
+  }
+
+  // 渲染单个事件卡片
+  const renderEventCard = (event: HistoryEvent, index: number, totalEvents: number) => {
+    const isLast = index === totalEvents - 1
+    
+    // 颜色方案
+    let borderColor: string
+    let bgColor: string
+    
+    switch (event.type) {
+      case 'SUBMIT':
+      case 'TRANSFER':
+      case 'LOCK':
+        borderColor = 'border-gray-300'
+        bgColor = 'bg-gray-50'
         break
       case 'APPROVE':
-        icon = <CheckCircle className="w-5 h-5 text-green-600" />
-        title = '审核通过'
+      case 'UNLOCK_APPROVED':
+        borderColor = 'border-green-300'
         bgColor = 'bg-green-50'
-        borderColor = 'border-green-200'
         break
       case 'REQUEST_REVISION':
-        icon = <XCircle className="w-5 h-5 text-orange-600" />
-        title = '要求修改'
-        bgColor = 'bg-orange-50'
-        borderColor = 'border-orange-200'
-        break
       case 'UNLOCK_REQUEST':
-        icon = <Unlock className="w-5 h-5 text-amber-600" />
-        title = '申请解锁'
-        bgColor = 'bg-amber-50'
-        borderColor = 'border-amber-200'
-        break
-      case 'UNLOCK_APPROVED':
-        icon = <CheckCircle className="w-5 h-5 text-green-600" />
-        title = '批准解锁'
-        bgColor = 'bg-green-50'
-        borderColor = 'border-green-200'
-        break
       case 'UNLOCK_REJECTED':
-        icon = <XCircle className="w-5 h-5 text-red-600" />
-        title = '拒绝解锁'
+        borderColor = 'border-red-300'
         bgColor = 'bg-red-50'
-        borderColor = 'border-red-200'
         break
       default:
-        icon = <Clock className="w-5 h-5 text-gray-600" />
-        title = event.type
+        borderColor = 'border-gray-300'
         bgColor = 'bg-gray-50'
-        borderColor = 'border-gray-200'
     }
 
     return (
       <div key={event.id}>
-        <div className={`flex items-start gap-3 p-4 rounded-lg border ${borderColor} ${bgColor}`}>
-          {icon}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-medium">{title}</p>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatDateTime(event.timestamp)}
-              </span>
-            </div>
-            
-            {/* 操作人信息 */}
-            {event.user && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {event.user.name}（{getRoleLabel(event.user.role)}）
-              </p>
-            )}
-            
-            {/* 目标对象 - 提交给/转交给 */}
-            {event.target && (event.type === 'SUBMIT' || event.type === 'TRANSFER') && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {event.type === 'SUBMIT' ? '提交给' : '转交给'}：{event.target.name}（{getRoleLabel(event.target.role)}）
-              </p>
-            )}
-            
-            {/* 留言/反馈 */}
-            {(event.note || event.feedback) && (
-              <p className="text-sm text-muted-foreground mt-2 bg-white/50 p-2 rounded">
-                💬 {event.note || event.feedback}
-              </p>
-            )}
-            
-            {/* 批注附件 - 只显示名称，不提供下载 */}
-            {event.attachments && event.attachments.length > 0 && (
-              <div className="mt-2 space-y-1">
-                <p className="text-xs text-muted-foreground">📎 批注附件：</p>
-                <div className="flex flex-wrap gap-2">
-                  {event.attachments.map((att) => (
-                    <span
-                      key={att.id}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-white/50 rounded border border-gray-200"
-                      title={att.name}
-                    >
-                      <span className="truncate max-w-[150px]">{att.name}</span>
-                      <span className="text-muted-foreground">({formatFileSize(att.size)})</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+        <div className={`p-4 rounded-lg border ${borderColor} ${bgColor}`}>
+          {/* 步骤编号和描述 */}
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm">
+              <span className="font-medium">第{event.stepNumber}步：</span>
+              <span className="text-gray-700">{getEventDescription(event)}</span>
+            </p>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDateTime(event.timestamp)}
+            </span>
           </div>
+          
+          {/* 留言/原因/意见 */}
+          {event.message && event.type !== 'LOCK' && (
+            <p className="text-sm text-muted-foreground mt-2 bg-white/50 p-2 rounded">
+              {event.type === 'SUBMIT' ? '留言' : 
+               event.type === 'TRANSFER' ? '原因' :
+               event.type === 'UNLOCK_REQUEST' ? '原因' :
+               event.type === 'UNLOCK_APPROVED' || event.type === 'UNLOCK_REJECTED' ? '原因' :
+               event.type === 'REQUEST_REVISION' ? '原因' :
+               '意见'}：{event.message}
+            </p>
+          )}
+          
+          {/* 锁定状态显示附件数量 */}
+          {event.type === 'LOCK' && event.message && (
+            <p className="text-sm text-muted-foreground mt-2">
+              状态：{event.message}
+            </p>
+          )}
+          
+          {/* 批注附件 - 只显示文件名 */}
+          {event.attachments && event.attachments.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-1">附件：{event.attachments.join('、')}</p>
+            </div>
+          )}
         </div>
         
         {/* 向上箭头指示时间顺序 */}
@@ -314,16 +420,9 @@ export function ReviewHistory({
         <CardTitle className="text-lg">审核历史</CardTitle>
       </CardHeader>
       <CardContent className="space-y-0">
-        {events.map((event, index) => renderEventCard(event, index))}
-        
-        {/* 如果是锁定状态，显示锁定信息和附件数量 */}
-        {reviewStatus === 'LOCKED' && (
-          <div className="mt-2 pt-2 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Lock className="w-4 h-4" />
-              <span>记录已锁定，附件：{attachmentCount} 个</span>
-            </div>
-          </div>
+        {/* 反转数组，使最新的在上面 */}
+        {[...events].reverse().map((event, index) => 
+          renderEventCard(event, index, events.length)
         )}
       </CardContent>
     </Card>

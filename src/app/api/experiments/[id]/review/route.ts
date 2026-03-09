@@ -49,7 +49,10 @@ export async function POST(
             project: {
               include: {
                 owner: { select: { id: true, name: true, email: true, role: true, avatar: true } },
-                members: { select: { id: true, name: true, email: true, role: true, avatar: true } }
+                members: { select: { id: true, name: true, email: true, role: true, avatar: true } },
+                projectMembers: {
+                  select: { userId: true, role: true }
+                }
               }
             }
           }
@@ -68,6 +71,21 @@ export async function POST(
       return NextResponse.json({ error: '实验记录不存在' }, { status: 404 })
     }
 
+    // 构建项目角色映射表
+    const projectRoleMap: Record<string, string> = {}
+    for (const ep of experiment.experimentProjects) {
+      for (const pm of ep.project.projectMembers) {
+        const existingRole = projectRoleMap[pm.userId]
+        const rolePriority = { PROJECT_LEAD: 3, MEMBER: 2, VIEWER: 1 }
+        if (!existingRole || (rolePriority[pm.role as keyof typeof rolePriority] || 0) > (rolePriority[existingRole as keyof typeof rolePriority] || 0)) {
+          projectRoleMap[pm.userId] = pm.role
+        }
+      }
+      if (ep.project.ownerId) {
+        projectRoleMap[ep.project.ownerId] = 'PROJECT_LEAD'
+      }
+    }
+
     // 检查状态
     if (experiment.reviewStatus !== 'PENDING_REVIEW') {
       return NextResponse.json({ error: '当前状态不能审核' }, { status: 400 })
@@ -76,7 +94,7 @@ export async function POST(
     // 检查权限（管理员或项目负责人可审核）
     const isProjectLead = experiment.experimentProjects.some(ep =>
       ep.project.ownerId === userId ||
-      ep.project.members.some(m => m.id === userId && m.role === 'PROJECT_LEAD')
+      ep.project.projectMembers.some(pm => pm.userId === userId && pm.role === 'PROJECT_LEAD')
     )
     const canReview = currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN' || isProjectLead
 
@@ -98,7 +116,7 @@ export async function POST(
       // 检查目标审核人是否有权限审核
       const targetIsProjectLead = experiment.experimentProjects.some(ep =>
         ep.project.ownerId === transferToUserId ||
-        ep.project.members.some(m => m.id === transferToUserId && m.role === 'PROJECT_LEAD')
+        ep.project.projectMembers.some(pm => pm.userId === transferToUserId && pm.role === 'PROJECT_LEAD')
       )
       const targetCanReview = targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN' || targetIsProjectLead
 
@@ -256,7 +274,10 @@ export async function POST(
             project: {
               include: {
                 owner: { select: { id: true, name: true, email: true, role: true, avatar: true } },
-                members: { select: { id: true, name: true, email: true, role: true, avatar: true } }
+                members: { select: { id: true, name: true, email: true, role: true, avatar: true } },
+                projectMembers: {
+                  select: { userId: true, role: true }
+                }
               }
             }
           }
@@ -282,9 +303,40 @@ export async function POST(
             attachments: true
           },
           orderBy: { createdAt: 'desc' }
+        },
+        unlockRequests: {
+          include: {
+            requester: { select: { id: true, name: true, email: true, role: true, avatar: true } },
+            processor: { select: { id: true, name: true, email: true, role: true, avatar: true } }
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     })
+
+    // 重新构建项目角色映射表
+    const newProjectRoleMap: Record<string, string> = {}
+    for (const ep of result!.experimentProjects) {
+      for (const pm of ep.project.projectMembers) {
+        const existingRole = newProjectRoleMap[pm.userId]
+        const rolePriority = { PROJECT_LEAD: 3, MEMBER: 2, VIEWER: 1 }
+        if (!existingRole || (rolePriority[pm.role as keyof typeof rolePriority] || 0) > (rolePriority[existingRole as keyof typeof rolePriority] || 0)) {
+          newProjectRoleMap[pm.userId] = pm.role
+        }
+      }
+      if (ep.project.ownerId) {
+        newProjectRoleMap[ep.project.ownerId] = 'PROJECT_LEAD'
+      }
+    }
+
+    // 辅助函数：为用户添加项目角色
+    const getUserWithProjectRole = (user: { id: string; name: string; email: string; role: string; avatar?: string | null } | null) => {
+      if (!user) return null
+      return {
+        ...user,
+        projectRole: newProjectRoleMap[user.id] || null
+      }
+    }
 
     return NextResponse.json({
       id: result!.id,
@@ -298,7 +350,7 @@ export async function POST(
       completenessScore: result!.completenessScore,
       tags: result!.tags,
       authorId: result!.authorId,
-      author: result!.author,
+      author: getUserWithProjectRole(result!.author),
       projects: result!.experimentProjects.map(ep => ({
         id: ep.project.id,
         name: ep.project.name,
@@ -324,7 +376,7 @@ export async function POST(
         reviewFeedback: att.reviewFeedback ? {
           id: att.reviewFeedback.id,
           action: att.reviewFeedback.action,
-          reviewer: att.reviewFeedback.reviewer
+          reviewer: getUserWithProjectRole(att.reviewFeedback.reviewer)
         } : null
       })),
       reviewRequests: result!.reviewRequests.map(rr => ({
@@ -334,7 +386,7 @@ export async function POST(
         createdAt: rr.createdAt.toISOString(),
         updatedAt: rr.updatedAt.toISOString(),
         reviewerId: rr.reviewerId,
-        reviewer: rr.reviewer
+        reviewer: getUserWithProjectRole(rr.reviewer)
       })),
       reviewFeedbacks: result!.reviewFeedbacks.map(rf => ({
         id: rf.id,
@@ -342,7 +394,7 @@ export async function POST(
         feedback: rf.feedback,
         createdAt: rf.createdAt.toISOString(),
         reviewerId: rf.reviewerId,
-        reviewer: rf.reviewer,
+        reviewer: getUserWithProjectRole(rf.reviewer),
         attachments: rf.attachments.map(att => ({
           id: att.id,
           name: att.name,
@@ -350,6 +402,18 @@ export async function POST(
           type: att.type,
           createdAt: att.createdAt.toISOString()
         }))
+      })),
+      unlockRequests: result!.unlockRequests.map(ur => ({
+        id: ur.id,
+        reason: ur.reason,
+        status: ur.status,
+        response: ur.response,
+        createdAt: ur.createdAt.toISOString(),
+        processedAt: ur.processedAt?.toISOString() || null,
+        requesterId: ur.requesterId,
+        requester: getUserWithProjectRole(ur.requester),
+        processorId: ur.processorId,
+        processor: getUserWithProjectRole(ur.processor)
       })),
       createdAt: result!.createdAt.toISOString(),
       updatedAt: result!.updatedAt.toISOString(),

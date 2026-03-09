@@ -1447,7 +1447,7 @@ function EmptyState({
   )
 }
 
-// 反馈历史组件
+// 反馈历史组件 - 只显示最新一次操作
 function ExperimentFeedbackHistory({ experimentId }: { experimentId: string }) {
   const [feedbacks, setFeedbacks] = useState<ReviewFeedback[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -1495,72 +1495,71 @@ function ExperimentFeedbackHistory({ experimentId }: { experimentId: string }) {
     return <div className="text-center py-4 text-muted-foreground">暂无反馈记录</div>
   }
 
+  // 只显示最新的一条反馈
+  const latestFeedback = feedbacks[0]
+
   return (
-    <div className="space-y-4">
-      {feedbacks.map((feedback) => (
-        <Card key={feedback.id}>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                {feedback.action === 'APPROVE' ? (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 text-orange-600" />
-                )}
-                {feedback.action === 'APPROVE' ? '审核通过' : '要求修改'}
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">
-                {new Date(feedback.createdAt).toLocaleDateString('zh-CN', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm">
-              <span className="font-medium">审核人：</span>
-              {feedback.reviewer.name}
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm flex items-center gap-2">
+            {latestFeedback.action === 'APPROVE' ? (
+              <CheckCircle className="w-4 h-4 text-green-600" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-orange-600" />
+            )}
+            {latestFeedback.action === 'APPROVE' ? '审核通过' : '要求修改'}
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {new Date(latestFeedback.createdAt).toLocaleDateString('zh-CN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm">
+          <span className="font-medium">审核人：</span>
+          {latestFeedback.reviewer.name}
+        </p>
+        {latestFeedback.feedback && (
+          <p className="text-sm mt-2">
+            <span className="font-medium">反馈意见：</span>
+            {latestFeedback.feedback}
+          </p>
+        )}
+        {/* 批注附件 */}
+        {latestFeedback.attachments && latestFeedback.attachments.length > 0 && (
+          <div className="mt-3">
+            <p className="text-sm font-medium mb-2 flex items-center gap-1">
+              <Paperclip className="w-3.5 h-3.5" />
+              批注附件
             </p>
-            {feedback.feedback && (
-              <p className="text-sm mt-2">
-                <span className="font-medium">反馈意见：</span>
-                {feedback.feedback}
-              </p>
-            )}
-            {/* 批注附件 */}
-            {feedback.attachments && feedback.attachments.length > 0 && (
-              <div className="mt-3">
-                <p className="text-sm font-medium mb-2 flex items-center gap-1">
-                  <Paperclip className="w-3.5 h-3.5" />
-                  批注附件
-                </p>
-                <div className="space-y-1">
-                  {feedback.attachments.map((att) => (
-                    <div
-                      key={att.id}
-                      className="flex items-center justify-between p-2 bg-muted/50 rounded-md hover:bg-muted/70 cursor-pointer"
-                      onClick={() => handleDownloadAttachment(att.id, att.name)}
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                        <span className="truncate text-sm">{att.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          ({(att.size / 1024).toFixed(1)} KB)
-                        </span>
-                      </div>
-                      <Download className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  ))}
+            <div className="space-y-1">
+              {latestFeedback.attachments.map((att) => (
+                <div
+                  key={att.id}
+                  className="flex items-center justify-between p-2 bg-muted/50 rounded-md hover:bg-muted/70 cursor-pointer"
+                  onClick={() => handleDownloadAttachment(att.id, att.name)}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="truncate text-sm">{att.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({(att.size / 1024).toFixed(1)} KB)
+                    </span>
+                  </div>
+                  <Download className="w-4 h-4 text-muted-foreground" />
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

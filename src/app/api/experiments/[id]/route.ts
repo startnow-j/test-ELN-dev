@@ -43,8 +43,7 @@ export async function GET(
                   select: { id: true, name: true, email: true, role: true, avatar: true }
                 },
                 projectMembers: {
-                  where: { userId },
-                  select: { role: true }
+                  select: { userId: true, role: true }
                 }
               }
             }
@@ -54,6 +53,26 @@ export async function GET(
         reviewFeedbacks: {
           include: {
             reviewer: {
+              select: { id: true, name: true, email: true, role: true, avatar: true }
+            },
+            attachments: true
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        reviewRequests: {
+          include: {
+            reviewer: {
+              select: { id: true, name: true, email: true, role: true, avatar: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        unlockRequests: {
+          include: {
+            requester: {
+              select: { id: true, name: true, email: true, role: true, avatar: true }
+            },
+            processor: {
               select: { id: true, name: true, email: true, role: true, avatar: true }
             }
           },
@@ -65,6 +84,37 @@ export async function GET(
     if (!experiment) {
       return NextResponse.json({ error: '实验记录不存在' }, { status: 404 })
     }
+
+    // 构建项目角色映射表：userId -> 项目角色（优先 PROJECT_LEAD > MEMBER > VIEWER）
+    const projectRoleMap: Record<string, string> = {}
+    for (const ep of experiment.experimentProjects) {
+      for (const pm of ep.project.projectMembers) {
+        const existingRole = projectRoleMap[pm.userId]
+        const rolePriority = { PROJECT_LEAD: 3, MEMBER: 2, VIEWER: 1 }
+        if (!existingRole || (rolePriority[pm.role as keyof typeof rolePriority] || 0) > (rolePriority[existingRole as keyof typeof rolePriority] || 0)) {
+          projectRoleMap[pm.userId] = pm.role
+        }
+      }
+      // 项目owner默认是负责人
+      if (ep.project.ownerId && !projectRoleMap[ep.project.ownerId]) {
+        projectRoleMap[ep.project.ownerId] = 'PROJECT_LEAD'
+      } else if (ep.project.ownerId) {
+        // owner优先级最高
+        projectRoleMap[ep.project.ownerId] = 'PROJECT_LEAD'
+      }
+    }
+
+    // 辅助函数：为用户添加项目角色
+    const getUserWithProjectRole = (user: { id: string; name: string; email: string; role: string; avatar?: string | null } | null) => {
+      if (!user) return null
+      return {
+        ...user,
+        projectRole: projectRoleMap[user.id] || null
+      }
+    }
+
+    // 获取当前用户在项目中的角色
+    const currentUserProjectRole = projectRoleMap[userId] || null
 
     return NextResponse.json({
       id: experiment.id,
@@ -78,22 +128,26 @@ export async function GET(
       completenessScore: experiment.completenessScore,
       tags: experiment.tags,
       authorId: experiment.authorId,
-      author: experiment.author,
+      author: getUserWithProjectRole(experiment.author),
       storageLocation: experiment.storageLocation,
       primaryProjectId: experiment.primaryProjectId,
-      projects: experiment.experimentProjects.map(ep => ({
-        id: ep.project.id,
-        name: ep.project.name,
-        description: ep.project.description,
-        status: ep.project.status,
-        startDate: ep.project.startDate,
-        endDate: ep.project.endDate,
-        ownerId: ep.project.ownerId,
-        owner: ep.project.owner,
-        members: ep.project.members,
-        myRole: ep.project.projectMembers[0]?.role || null,
-        createdAt: ep.project.createdAt.toISOString()
-      })),
+      projects: experiment.experimentProjects.map(ep => {
+        // 获取当前用户在此项目中的角色
+        const myRoleInProject = ep.project.projectMembers.find(pm => pm.userId === userId)?.role || null
+        return {
+          id: ep.project.id,
+          name: ep.project.name,
+          description: ep.project.description,
+          status: ep.project.status,
+          startDate: ep.project.startDate,
+          endDate: ep.project.endDate,
+          ownerId: ep.project.ownerId,
+          owner: ep.project.owner,
+          members: ep.project.members,
+          myRole: myRoleInProject || currentUserProjectRole,
+          createdAt: ep.project.createdAt.toISOString()
+        }
+      }),
       attachments: experiment.attachments.map(att => ({
         id: att.id,
         name: att.name,
@@ -110,7 +164,35 @@ export async function GET(
         feedback: rf.feedback,
         createdAt: rf.createdAt.toISOString(),
         reviewerId: rf.reviewerId,
-        reviewer: rf.reviewer
+        reviewer: getUserWithProjectRole(rf.reviewer),
+        attachments: rf.attachments?.map(att => ({
+          id: att.id,
+          name: att.name,
+          type: att.type,
+          size: att.size,
+          createdAt: att.createdAt.toISOString()
+        })) || []
+      })),
+      reviewRequests: experiment.reviewRequests.map(rr => ({
+        id: rr.id,
+        status: rr.status,
+        note: rr.note,
+        createdAt: rr.createdAt.toISOString(),
+        updatedAt: rr.updatedAt.toISOString(),
+        reviewerId: rr.reviewerId,
+        reviewer: getUserWithProjectRole(rr.reviewer)
+      })),
+      unlockRequests: experiment.unlockRequests.map(ur => ({
+        id: ur.id,
+        reason: ur.reason,
+        status: ur.status,
+        response: ur.response,
+        createdAt: ur.createdAt.toISOString(),
+        processedAt: ur.processedAt?.toISOString() || null,
+        requesterId: ur.requesterId,
+        requester: getUserWithProjectRole(ur.requester),
+        processorId: ur.processorId,
+        processor: getUserWithProjectRole(ur.processor)
       })),
       createdAt: experiment.createdAt.toISOString(),
       updatedAt: experiment.updatedAt.toISOString(),

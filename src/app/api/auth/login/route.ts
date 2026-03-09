@@ -38,16 +38,20 @@ export async function POST(request: NextRequest) {
     // 生成token
     const token = generateToken(user.id)
 
-    // 记录审计日志
-    await db.auditLog.create({
-      data: {
-        action: AuditAction.LOGIN,
-        entityType: 'User',
-        entityId: user.id,
-        userId: user.id,
-        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-      }
-    })
+    // 记录审计日志（不阻塞登录流程）
+    try {
+      await db.auditLog.create({
+        data: {
+          action: AuditAction.LOGIN,
+          entityType: 'User',
+          entityId: user.id,
+          userId: user.id,
+          ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+        }
+      })
+    } catch (auditError) {
+      console.error('Audit log error:', auditError)
+    }
 
     // 设置cookie
     const response = NextResponse.json({

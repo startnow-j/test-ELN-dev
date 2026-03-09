@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+// v3.3.7 - ReviewHistory bug fix
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -40,7 +41,8 @@ import {
   Send,
   Lock,
   FileText,
-  Users
+  Users,
+  Loader2
 } from 'lucide-react'
 import { useApp, Experiment, ReviewStatus, AppUser } from '@/contexts/AppContext'
 import { AttachmentManager } from '@/components/attachments/AttachmentManager'
@@ -86,7 +88,7 @@ const reviewStatusConfig: Record<ReviewStatus, { label: string; color: string; i
   },
 }
 
-export function ExperimentDetail({ experiment, onEdit, onBack }: ExperimentDetailProps) {
+export function ExperimentDetail({ experiment: initialExperiment, onEdit, onBack }: ExperimentDetailProps) {
   const { deleteExperiment, currentUser, triggerExtraction, updateExtractedInfo, submitForReview } = useApp()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
@@ -95,6 +97,36 @@ export function ExperimentDetail({ experiment, onEdit, onBack }: ExperimentDetai
   const [selectedReviewers, setSelectedReviewers] = useState<string[]>([])
   const [submitNote, setSubmitNote] = useState('')
   const [isLoadingReviewers, setIsLoadingReviewers] = useState(false)
+  
+  // 使用本地 state 存储最新的 experiment 数据
+  const [experiment, setExperiment] = useState<Experiment>(initialExperiment)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // 加载最新的实验数据（确保包含 unlockRequests 和 projectRole）
+  const loadExperimentData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/experiments/${initialExperiment.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setExperiment(data)
+        console.log('Loaded experiment data:', {
+          unlockRequests: data.unlockRequests?.length || 0,
+          reviewFeedbacks: data.reviewFeedbacks?.length || 0,
+          reviewRequests: data.reviewRequests?.length || 0,
+          authorProjectRole: data.author?.projectRole
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load experiment:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [initialExperiment.id])
+
+  // 组件挂载时加载最新数据
+  useEffect(() => {
+    loadExperimentData()
+  }, [loadExperimentData])
 
   const canEdit = (currentUser?.id === experiment.authorId || 
                   currentUser?.role === 'ADMIN' || 
@@ -206,6 +238,23 @@ export function ExperimentDetail({ experiment, onEdit, onBack }: ExperimentDetai
   }
 
   const statusConfig = reviewStatusConfig[experiment.reviewStatus]
+
+  // 加载状态显示
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="border-b border-border bg-background px-6 py-4 flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>加载中...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -448,9 +497,11 @@ export function ExperimentDetail({ experiment, onEdit, onBack }: ExperimentDetai
             <ReviewHistory
               reviewFeedbacks={experiment.reviewFeedbacks || []}
               reviewRequests={experiment.reviewRequests || []}
+              unlockRequests={experiment.unlockRequests || []}
               reviewStatus={experiment.reviewStatus}
               reviewedAt={experiment.reviewedAt}
               attachmentCount={experiment.attachments?.length || 0}
+              author={experiment.author}
             />
           </div>
         </div>
