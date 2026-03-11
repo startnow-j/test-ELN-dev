@@ -295,10 +295,10 @@ export function generateLinkFilePath(
 ): { fullPath: string; relativePath: string } {
   const experimentsDir = getProjectExperimentsDir(projectName)
   ensureDirectoryExists(experimentsDir)
-  
+
   const linkFilename = `${experimentId}.link`
   const fullPath = path.join(experimentsDir, linkFilename)
-  
+
   // 相对路径: projects/{projectName}/experiments/{experimentId}.link
   const relativePath = path.join(
     PROJECTS_DIR,
@@ -306,6 +306,54 @@ export function generateLinkFilePath(
     EXPERIMENTS_DIR,
     linkFilename
   ).replace(/\\/g, '/')
-  
+
   return { fullPath, relativePath }
+}
+
+/**
+ * 获取项目文档目录
+ * 格式: upload/projects/{项目名称}/documents/
+ */
+export function getProjectDocumentsDir(projectName: string): string {
+  const safeProjectName = sanitizeName(projectName)
+  return path.join(
+    process.cwd(),
+    UPLOAD_ROOT,
+    PROJECTS_DIR,
+    safeProjectName,
+    'documents'
+  )
+}
+
+/**
+ * 生成项目文档文件路径
+ * 用于上传项目文档（建议书、报告等）
+ */
+export function generateProjectDocumentPath(
+  projectName: string,
+  originalFilename: string
+): FilePathResult {
+  const documentsDir = getProjectDocumentsDir(projectName)
+  ensureDirectoryExists(documentsDir)
+
+  const datePrefix = getDatePrefix()
+  const ext = path.extname(originalFilename)
+  const baseName = path.basename(originalFilename, ext)
+  const safeBaseName = sanitizeName(baseName)
+  const uniqueFilename = getUniqueFilename(documentsDir, `${datePrefix}_${safeBaseName}${ext}`)
+  const fullPath = path.join(documentsDir, uniqueFilename)
+
+  // 相对路径: projects/{projectName}/documents/{date}_{filename}
+  const relativePath = path.join(
+    PROJECTS_DIR,
+    sanitizeName(projectName),
+    'documents',
+    uniqueFilename
+  ).replace(/\\/g, '/')
+
+  return {
+    fullPath,
+    relativePath,
+    directory: documentsDir
+  }
 }
