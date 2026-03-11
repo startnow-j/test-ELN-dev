@@ -853,75 +853,104 @@ export function MyTasks({ onViewExperiment, onEditExperiment }: MyTasksProps) {
             <div className="space-y-4">
               {myLockedRecords
                 .filter(e => e.title.toLowerCase().includes(searchTerm.toLowerCase()))
-                .map((experiment) => (
-                  <Card key={experiment.id} className="hover:border-primary/40 transition-colors">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <FlaskConical className="w-5 h-5 text-primary flex-shrink-0" />
-                            <h3 className="font-semibold text-lg truncate">{experiment.title}</h3>
-                            <Badge className={reviewStatusConfig[experiment.reviewStatus].color}>
-                              {reviewStatusConfig[experiment.reviewStatus].icon}
-                              <span className="ml-1">{reviewStatusConfig[experiment.reviewStatus].label}</span>
-                            </Badge>
-                          </div>
-                          
-                          <p className="text-muted-foreground line-clamp-2 mb-3">
-                            {experiment.summary || '暂无摘要'}
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                            {useGlobalView && (
-                              <span>作者: {experiment.author.name}</span>
-                            )}
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              锁定于 {formatDate(experiment.reviewedAt || experiment.updatedAt)}
-                            </span>
-                            {experiment.projects.length > 0 && (
-                              <span className="flex items-center gap-1">
-                                <FolderOpen className="w-4 h-4" />
-                                {experiment.projects.map(p => p.name).join(', ')}
+                .map((experiment) => {
+                  // 检查项目状态
+                  const hasRestrictedProject = experiment.projects?.some(
+                    p => p.status === 'COMPLETED' || p.status === 'ARCHIVED'
+                  )
+                  const restrictedProject = experiment.projects?.find(
+                    p => p.status === 'COMPLETED' || p.status === 'ARCHIVED'
+                  )
+                  
+                  return (
+                    <Card key={experiment.id} className="hover:border-primary/40 transition-colors">
+                      <CardContent className="p-6">
+                        {/* 项目状态限制提示 */}
+                        {hasRestrictedProject && (
+                          <div className={`mb-4 p-3 rounded-lg border text-sm ${
+                            restrictedProject?.status === 'ARCHIVED' 
+                              ? 'bg-gray-50 border-gray-200 text-gray-600' 
+                              : 'bg-blue-50 border-blue-200 text-blue-600'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <Lock className="w-3.5 h-3.5" />
+                              <span>
+                                项目「{restrictedProject?.name}」已{restrictedProject?.status === 'ARCHIVED' ? '归档' : '结束'}，不可申请解锁
                               </span>
-                            )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                         
-                        <div className="flex items-center gap-3 ml-4">
-                          {/* 完整度评分 */}
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="text-xs text-muted-foreground">完整度</span>
-                            <span className={`text-lg font-bold ${getScoreColor(experiment.completenessScore)}`}>
-                              {experiment.completenessScore}%
-                            </span>
-                            <Progress value={experiment.completenessScore} className="w-16 h-1.5" />
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                              <FlaskConical className="w-5 h-5 text-primary flex-shrink-0" />
+                              <h3 className="font-semibold text-lg truncate">{experiment.title}</h3>
+                              <Badge className={reviewStatusConfig[experiment.reviewStatus].color}>
+                                {reviewStatusConfig[experiment.reviewStatus].icon}
+                                <span className="ml-1">{reviewStatusConfig[experiment.reviewStatus].label}</span>
+                              </Badge>
+                            </div>
+                            
+                            <p className="text-muted-foreground line-clamp-2 mb-3">
+                              {experiment.summary || '暂无摘要'}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                              {useGlobalView && (
+                                <span>作者: {experiment.author.name}</span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                锁定于 {formatDate(experiment.reviewedAt || experiment.updatedAt)}
+                              </span>
+                              {experiment.projects.length > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <FolderOpen className="w-4 h-4" />
+                                  {experiment.projects.map(p => p.name).join(', ')}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           
-                          {/* 操作按钮 */}
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => onViewExperiment(experiment.id)}
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              查看
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openUnlockDialog(experiment)}
-                            >
-                              <Unlock className="w-4 h-4 mr-1" />
-                              申请解锁
-                            </Button>
+                          <div className="flex items-center gap-3 ml-4">
+                            {/* 完整度评分 */}
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="text-xs text-muted-foreground">完整度</span>
+                              <span className={`text-lg font-bold ${getScoreColor(experiment.completenessScore)}`}>
+                                {experiment.completenessScore}%
+                              </span>
+                              <Progress value={experiment.completenessScore} className="w-16 h-1.5" />
+                            </div>
+                            
+                            {/* 操作按钮 */}
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onViewExperiment(experiment.id)}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                查看
+                              </Button>
+                              {/* 只有非限制项目的实验才能申请解锁 */}
+                              {!hasRestrictedProject && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openUnlockDialog(experiment)}
+                                >
+                                  <Unlock className="w-4 h-4 mr-1" />
+                                  申请解锁
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
             </div>
           ) : (
             <EmptyState 

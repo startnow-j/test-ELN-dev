@@ -917,6 +917,26 @@ export function ProjectDetail({ project, experiments, onBack, onViewExperiment }
 
           {/* 实验记录Tab */}
           <TabsContent value="experiments">
+            {/* 项目状态提示 */}
+            {(project.status === 'COMPLETED' || project.status === 'ARCHIVED') && (
+              <div className={`mb-4 p-4 rounded-lg border ${
+                project.status === 'ARCHIVED' 
+                  ? 'bg-gray-50 border-gray-200 text-gray-700' 
+                  : 'bg-blue-50 border-blue-200 text-blue-700'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4" />
+                  <span className="font-medium">
+                    {project.status === 'ARCHIVED' ? '项目已归档' : '项目已结束'}
+                  </span>
+                </div>
+                <p className="text-sm mt-1 opacity-90">
+                  {project.status === 'ARCHIVED' 
+                    ? '归档项目的实验记录不可编辑、删除或提交审核' 
+                    : '已结束项目的实验记录不可编辑、删除或提交审核'}
+                </p>
+              </div>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>关联实验记录 ({experiments.length})</CardTitle>

@@ -1,10 +1,122 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getUserIdFromToken } from '@/lib/auth'
-import { canDeleteProject, isAdmin } from '@/lib/permissions'
+import { canDeleteProject, isAdmin, canAccessArchivedProject, getProjectRole } from '@/lib/permissions'
 import { AuditAction } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
+
+// 获取单个项目详情
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const userId = await getUserIdFromToken(request)
+    if (!userId) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 })
+    }
+
+    const { id } = await params
+
+    const project = await db.project.findUnique({
+      where: { id },
+      include: {
+        owner: {
+          select: { id: true, name: true, email: true, role: true, avatar: true }
+        },
+        members: {
+          select: { id: true, name: true, email: true, role: true, avatar: true }
+        },
+        projectMembers: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, role: true, avatar: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!project) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 })
+    }
+
+    // ARCHIVED 状态的权限检查
+    if (project.status === 'ARCHIVED') {
+      const accessCheck = await canAccessArchivedProject(userId, id)
+      
+      if (!accessCheck.canAccess) {
+        return NextResponse.json({ 
+          error: accessCheck.reason || '已归档项目仅对项目成员可见',
+          isArchived: true 
+        }, { status: 403 })
+      }
+
+      // 返回项目数据，标记归档状态和访问级别
+      return NextResponse.json({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        startDate: project.startDate?.toISOString() || null,
+        endDate: project.endDate?.toISOString() || null,
+        expectedEndDate: project.expectedEndDate?.toISOString() || null,
+        actualEndDate: project.actualEndDate?.toISOString() || null,
+        completedAt: project.completedAt?.toISOString() || null,
+        archivedAt: project.archivedAt?.toISOString() || null,
+        primaryLeader: project.primaryLeader,
+        ownerId: project.ownerId,
+        owner: project.owner,
+        members: project.members,
+        projectMembers: project.projectMembers.map(pm => ({
+          ...pm.user,
+          projectRole: pm.role
+        })),
+        createdAt: project.createdAt.toISOString(),
+        isArchived: true,
+        accessLevel: accessCheck.accessLevel, // 'full' | 'readonly'
+        canEdit: false, // 归档项目不可编辑
+        canChangeStatus: accessCheck.accessLevel === 'full' // 只有管理员可以解除归档
+      })
+    }
+
+    // 非 ARCHIVED 状态的正常返回
+    const adminCheck = await isAdmin(userId)
+    const projectRole = await getProjectRole(userId, id)
+    const isOwner = project.ownerId === userId
+    const canManage = adminCheck || isOwner || projectRole === 'PROJECT_LEAD'
+
+    return NextResponse.json({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      status: project.status,
+      startDate: project.startDate?.toISOString() || null,
+      endDate: project.endDate?.toISOString() || null,
+      expectedEndDate: project.expectedEndDate?.toISOString() || null,
+      actualEndDate: project.actualEndDate?.toISOString() || null,
+      completedAt: project.completedAt?.toISOString() || null,
+      archivedAt: project.archivedAt?.toISOString() || null,
+      primaryLeader: project.primaryLeader,
+      ownerId: project.ownerId,
+      owner: project.owner,
+      members: project.members,
+      projectMembers: project.projectMembers.map(pm => ({
+        ...pm.user,
+        projectRole: pm.role
+      })),
+      createdAt: project.createdAt.toISOString(),
+      isArchived: false,
+      canEdit: canManage && project.status === 'ACTIVE',
+      canChangeStatus: canManage,
+      myRole: projectRole
+    })
+  } catch (error) {
+    console.error('Get project error:', error)
+    return NextResponse.json({ error: '获取项目失败' }, { status: 500 })
+  }
+}
 
 export async function PUT(
   request: NextRequest,

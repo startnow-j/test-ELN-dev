@@ -128,21 +128,37 @@ export function ExperimentDetail({ experiment: initialExperiment, onEdit, onBack
     loadExperimentData()
   }, [loadExperimentData])
 
-  const canEdit = (currentUser?.id === experiment.authorId || 
+  // 检查项目状态 - 如果实验关联的项目已完成或归档，则限制操作
+  const hasRestrictedProject = experiment.projects?.some(
+    p => p.status === 'COMPLETED' || p.status === 'ARCHIVED'
+  )
+  const restrictedProject = experiment.projects?.find(
+    p => p.status === 'COMPLETED' || p.status === 'ARCHIVED'
+  )
+
+  // 基础权限检查
+  const baseCanEdit = (currentUser?.id === experiment.authorId || 
                   currentUser?.role === 'ADMIN' || 
-                  currentUser?.role === 'PROJECT_LEAD') &&
+                  currentUser?.role === 'SUPER_ADMIN') &&
                   (experiment.reviewStatus === 'DRAFT' || experiment.reviewStatus === 'NEEDS_REVISION')
   
-  const canDelete = currentUser?.id === experiment.authorId || 
-                   currentUser?.role === 'ADMIN'
+  const baseCanDelete = currentUser?.id === experiment.authorId || 
+                   currentUser?.role === 'ADMIN' ||
+                   currentUser?.role === 'SUPER_ADMIN'
   
-  const canSubmit = experiment.completenessScore >= 60 && 
-                   canEdit && 
+  const baseCanSubmit = experiment.completenessScore >= 60 && 
+                   baseCanEdit && 
                    experiment.reviewStatus === 'DRAFT' &&
                    experiment.projects.length > 0  // 必须关联项目
 
+  // 最终权限 - 考虑项目状态限制
+  const canEdit = baseCanEdit && !hasRestrictedProject
+  const canDelete = baseCanDelete && !hasRestrictedProject
+  const canSubmit = baseCanSubmit && !hasRestrictedProject
+
   const canReview = currentUser?.role === 'PROJECT_LEAD' || 
-                   currentUser?.role === 'ADMIN'
+                   currentUser?.role === 'ADMIN' ||
+                   currentUser?.role === 'SUPER_ADMIN'
 
   const handleDelete = async () => {
     await deleteExperiment(experiment.id)
@@ -311,6 +327,25 @@ export function ExperimentDetail({ experiment: initialExperiment, onEdit, onBack
 
       {/* 内容区域 */}
       <div className="flex-1 overflow-auto p-6">
+        {/* 项目状态限制提示 */}
+        {hasRestrictedProject && (
+          <div className={`mb-6 p-4 rounded-lg border ${
+            restrictedProject?.status === 'ARCHIVED' 
+              ? 'bg-gray-50 border-gray-200 text-gray-700' 
+              : 'bg-blue-50 border-blue-200 text-blue-700'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              <span className="font-medium">
+                项目「{restrictedProject?.name}」已{restrictedProject?.status === 'ARCHIVED' ? '归档' : '结束'}
+              </span>
+            </div>
+            <p className="text-sm mt-1 opacity-90">
+              此实验记录不可编辑、删除或提交审核
+            </p>
+          </div>
+        )}
+        
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 左侧 - 主要内容 */}
           <div className="lg:col-span-2 space-y-6">
